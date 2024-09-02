@@ -57,9 +57,9 @@ FILES_TO_VERIFY = $(shell cat checksums | grep -o " .*")
 MODIFIED_MESSAGE = "\
 \n\
 =============================================================================================\n\
-YOU HAVE MODIFIED THE HEADER FILES, the diff output above shows which ones.\n\
-This may cause unexpected errors, as the autograder uses the ORIGINAL header files!\n\
-You can find the original headers on Github.\n\
+YOU HAVE MODIFIED THE HEADER FILES!\n\
+This may cause unexpected errors as the autograder uses the ORIGINAL header files instead of your copies\n\
+The diff output above shows which ones have been modified and should be restored\n\
 =============================================================================================\n\
 "
 integrity:
