@@ -41,30 +41,14 @@ all: release
 .PHONY: release
 .PHONY: debug
 
-release: integrity $(EXES_STUDENT)
-debug: integrity clean $(EXES_STUDENT:%=%-debug)
+release: $(EXES_STUDENT)
+debug: clean $(EXES_STUDENT:%=%-debug)
 
 # this one is a little different than others
 # for the love of god make sure this target isn't first in the list
 .PHONY: test
 test:
 	./test.sh
-
-# Verifiy the checksum of ungraded files listed in checksums
-# Warn student if any has been modified
-# Generate checksums file by: md5sum <list of files to verify> > checksums
-.PHONY: integrity
-FILES_TO_VERIFY = $(shell cat checksums | grep -o " .*")
-MODIFIED_MESSAGE = "\
-\n\
-=============================================================================================\n\
-YOU HAVE MODIFIED THE HEADER FILES, the diff output above shows which ones.\n\
-This may cause unexpected errors, as the autograder uses the ORIGINAL header files!\n\
-You can find the original headers on Github.\n\
-=============================================================================================\n\
-"
-integrity:
-	@md5sum $(FILES_TO_VERIFY) | diff checksums - || echo $(MODIFIED_MESSAGE)
 
 # include dependencies
 -include $(OBJS_DIR)/*.d
