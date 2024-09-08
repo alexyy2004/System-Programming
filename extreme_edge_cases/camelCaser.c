@@ -38,6 +38,9 @@ char **split(const char *input_str) { //split according to "."
 
 char **camel_caser(const char *input_str) {
     // TODO: Implement me!
+    if (input_str == NULL) {
+        return NULL;
+    }
     char **split_str = split(input_str);
     int num_of_strings = 0;
     while (split_str[num_of_strings] != NULL) {
