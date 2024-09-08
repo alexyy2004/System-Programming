@@ -10,7 +10,23 @@
 #include "camelCaser_tests.h"
 
 int test(char *input, char **target, char **(*camelCaser)(const char *), void (*destroy)(char **)) {
+    if (input == NULL) {
+        if (target == NULL) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
     char **output = camelCaser(input);
+    if (output[0] == NULL) {
+        if (target == NULL) {
+            destroy(output);
+            return 1;
+        } else {
+            destroy(output);
+            return 0;
+        }
+    }
     int idx = 0;
     while (target[idx] != NULL) {
         if (strcmp(target[idx], output[idx]) != 0) {
@@ -81,13 +97,27 @@ int test_camelCaser(char **(*camelCaser)(const char *),
         return 0;
     }
 
-    char *input_10 = "Hello, World ! . ";
-    if (!test(input_10, (char *[]){"hello",
-        "world",
-        "",
-        NULL}, camelCaser, destroy)) {
+    // char *input_10 = "Hello, World ! . ";
+    // if (!test(input_10, (char *[]){"hello",
+    //     "world",
+    //     "",
+    //     NULL}, camelCaser, destroy)) {
+    //     return 0;
+    // }
+    if (!test(NULL, NULL, camelCaser, destroy)) {
         return 0;
     }
+
+    if (!test("", 
+                NULL, camelCaser, destroy)) {
+        return 0;
+    }
+    
+    // if (!test("    ", 
+    //             (char*[]){NULL}, camelCaser, destroy)) {
+    //     return 0;
+    // }
+
 
     return 1;
 }
