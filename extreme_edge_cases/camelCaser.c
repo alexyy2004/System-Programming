@@ -18,7 +18,8 @@ char **split(const char *input_str) { //split according to "."
     
     while ((unsigned int)idx < str_length) {
         if (ispunct(input_str[idx])) {
-            char *temp = malloc(idx - prev_word_end_idx + 1);
+            // char *temp = malloc(idx - prev_word_end_idx + 1);
+            char *temp = calloc(idx - prev_word_end_idx + 1, sizeof(char));
             strncpy(temp, &input_str[prev_word_end_idx], idx - prev_word_end_idx);
             temp[idx - prev_word_end_idx] = '\0';
             prev_word_end_idx = idx + 1;
@@ -46,14 +47,16 @@ char **camel_caser(const char *input_str) {
     while (split_str[num_of_strings] != NULL) {
         num_of_strings += 1;
     }
-    char **result = malloc((num_of_strings + 1) * sizeof(char*));
+    // char **result = malloc((num_of_strings + 1) * sizeof(char*));
+    char **result = calloc(num_of_strings + 1, sizeof(char*));
 
     int i = 0;
     int count = 0; // the index of char * in result
     while (split_str[i] != NULL) {
         bool flag = true; // true = start of a new word
         char *temp = split_str[i];
-        char *new_str = malloc(strlen(temp) + 1);
+        // char *new_str = malloc(strlen(temp) + 1);
+        char *new_str = calloc(strlen(temp) + 1, sizeof(char));
         int new_idx = 0;
         for (int j = 0; (unsigned int)j < strlen(temp); j++) {
             if (!ispunct(temp[j]) && !isalpha(temp[j]) && !isspace(temp[j])) {
