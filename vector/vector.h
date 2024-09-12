@@ -303,7 +303,7 @@ void vector_clear(vector *this);
  * Creates a vector that performs no memory management and uses only shallow
  * callback functions.
  */
-inline vector *shallow_vector_create() {
+static inline vector *shallow_vector_create() {
     return vector_create(shallow_copy_constructor, shallow_destructor,
                          shallow_default_constructor);
 }
@@ -311,7 +311,7 @@ inline vector *shallow_vector_create() {
 /**
  * Creates a vector meant for string(s).
  */
-inline vector *string_vector_create() {
+static inline vector *string_vector_create() {
     return vector_create(string_copy_constructor, string_destructor,
                          string_default_constructor);
 }
@@ -319,7 +319,7 @@ inline vector *string_vector_create() {
 /**
  * Creates a vector meant for char(s).
  */
-inline vector *char_vector_create() {
+static inline vector *char_vector_create() {
     return vector_create(char_copy_constructor, char_destructor,
                          char_default_constructor);
 }
@@ -327,7 +327,7 @@ inline vector *char_vector_create() {
 /**
  * Creates a vector meant for double(s).
  */
-inline vector *double_vector_create() {
+static inline vector *double_vector_create() {
     return vector_create(double_copy_constructor, double_destructor,
                          double_default_constructor);
 }
@@ -335,7 +335,7 @@ inline vector *double_vector_create() {
 /**
  * Creates a vector meant for float(s).
  */
-inline vector *float_vector_create() {
+static inline vector *float_vector_create() {
     return vector_create(float_copy_constructor, float_destructor,
                          float_default_constructor);
 }
@@ -343,7 +343,7 @@ inline vector *float_vector_create() {
 /**
  * Creates a vector meant for int(s).
  */
-inline vector *int_vector_create() {
+static inline vector *int_vector_create() {
     return vector_create(int_copy_constructor, int_destructor,
                          int_default_constructor);
 }
@@ -351,7 +351,7 @@ inline vector *int_vector_create() {
 /**
  * Creates a vector meant for long(s).
  */
-inline vector *long_vector_create() {
+static inline vector *long_vector_create() {
     return vector_create(long_copy_constructor, long_destructor,
                          long_default_constructor);
 }
@@ -359,7 +359,7 @@ inline vector *long_vector_create() {
 /**
  * Creates a vector meant for short(s).
  */
-inline vector *short_vector_create() {
+static inline vector *short_vector_create() {
     return vector_create(short_copy_constructor, short_destructor,
                          short_default_constructor);
 }
@@ -367,7 +367,7 @@ inline vector *short_vector_create() {
 /**
  * Creates a vector meant for unsigned char(s).
  */
-inline vector *unsigned_char_vector_create() {
+static inline vector *unsigned_char_vector_create() {
     return vector_create(unsigned_char_copy_constructor,
                          unsigned_char_destructor,
                          unsigned_char_default_constructor);
@@ -376,7 +376,7 @@ inline vector *unsigned_char_vector_create() {
 /**
  * Creates a vector meant for unsigned int(s).
  */
-inline vector *unsigned_int_vector_create() {
+static inline vector *unsigned_int_vector_create() {
     return vector_create(unsigned_int_copy_constructor, unsigned_int_destructor,
                          unsigned_int_default_constructor);
 }
@@ -384,7 +384,7 @@ inline vector *unsigned_int_vector_create() {
 /**
  * Creates a vector meant for unsigned long(s).
  */
-inline vector *unsigned_long_vector_create() {
+static inline vector *unsigned_long_vector_create() {
     return vector_create(unsigned_long_copy_constructor,
                          unsigned_long_destructor,
                          unsigned_long_default_constructor);
@@ -393,7 +393,7 @@ inline vector *unsigned_long_vector_create() {
 /**
  * Creates a vector meant for unsigned short(s).
  */
-inline vector *unsigned_short_vector_create() {
+static inline vector *unsigned_short_vector_create() {
     return vector_create(unsigned_short_copy_constructor,
                          unsigned_short_destructor,
                          unsigned_short_default_constructor);
