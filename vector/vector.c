@@ -249,7 +249,6 @@ void *vector_get(vector *this, size_t position) {
     assert(this);
     // your code here
     // return *(vector_at(this, position));
-    printf("position: %zu\n", position);
     return this->array[position];
 }
 
@@ -287,12 +286,12 @@ void vector_insert(vector *this, size_t position, void *element) {
     // your code here
     if (this->size + 1 > this->capacity) {
         vector_reserve(this, this->size + 1);
-        this->capacity = get_new_capacity(this->size);
+        // this->capacity = get_new_capacity(this->size);
     }
     for (size_t i = this->size; i > position; i--) {
         this->array[i] = this->array[i-1];
     }
-    this->array[position] = this->copy_constructor(element);   
+    this->array[position] = this->copy_constructor(element);
     this->size += 1;
 }
 

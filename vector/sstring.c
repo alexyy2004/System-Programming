@@ -50,10 +50,12 @@ vector *sstring_split(sstring *this, char delimiter) {
     // your code goes here
     vector *vec = string_vector_create();
     char *cstr = sstring_to_cstr(this);
-    char *token = strtok(cstr, &delimiter);
+    char *token = strsep(&cstr, &delimiter);
+    // char *token = strtok(cstr, &delimiter);
     while (token != NULL) {
         vector_push_back(vec, token);
-        token = strtok(NULL, &delimiter);
+        // token = strtok(NULL, &delimiter);
+        token = strsep(&cstr, &delimiter);
     }
     free(cstr);
     return vec;
