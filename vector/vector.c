@@ -82,28 +82,41 @@ vector *vector_create(copy_constructor_type copy_constructor,
     // your code here
     // Casting to void to remove complier error. Remove this line when you are
     // ready.
-    vector *vec = (vector *)calloc(1, sizeof(vector));
-    if (copy_constructor == NULL) {
-        vec->copy_constructor = shallow_copy_constructor;
+
+    vector *vec = calloc(1, sizeof(vector));
+    if ((!copy_constructor) && (!destructor) && (!default_constructor)) {
+      vec->copy_constructor = shallow_copy_constructor;
+      vec->destructor = shallow_destructor;
+      vec->default_constructor = shallow_default_constructor;
     } else {
-        vec->copy_constructor = copy_constructor;
+      assert(copy_constructor);
+      assert(destructor);
+      assert(default_constructor);
+      vec->copy_constructor = copy_constructor;
+      vec->destructor = destructor;
+      vec->default_constructor = default_constructor;
     }
-    if (destructor == NULL) {
-        vec->destructor = shallow_destructor;
-    } else {
-        vec->destructor = destructor;
-    }
-    if (default_constructor == NULL) {
-        vec->default_constructor = shallow_default_constructor;
-    } else {
-        vec->default_constructor = default_constructor;
-    }
+    // if (copy_constructor == NULL) {
+    //     vec->copy_constructor = shallow_copy_constructor;
+    // } else {
+    //     vec->copy_constructor = copy_constructor;
+    // }
+    // if (destructor == NULL) {
+    //     vec->destructor = shallow_destructor;
+    // } else {
+    //     vec->destructor = destructor;
+    // }
+    // if (default_constructor == NULL) {
+    //     vec->default_constructor = shallow_default_constructor;
+    // } else {
+    //     vec->default_constructor = default_constructor;
+    // }
     size_t size = 0;
     size_t capacity = INITIAL_CAPACITY;
-    void **array = (void **)calloc(0, sizeof(void *)); // initialize the elements in array to be 0
+    // void **array = (void **)calloc(vec->capacity, sizeof(void *)); // initialize the elements in array to be 0
     vec->size = size;
     vec->capacity = capacity;
-    vec->array = array;
+    vec->array = calloc(vec->capacity, sizeof(void *));
     return vec;
 }
 
@@ -154,25 +167,27 @@ void vector_resize(vector *this, size_t n) {
     //     this->size = n;
     // }
     
-    if (n < this->size) {
+    if (n <= this->size) {
         for (size_t i = n; i < this->size; i++) {
             this->destructor(this->array[i]);
         }
+        // this->array = realloc(this->array, this->capacity * sizeof(void *));
         this->size = n;
-        return;
-    }
-
-    if (n > this->size) {
+    } else {
         if (n <= this->capacity) {
-            for (size_t i = this->size; i < this->capacity; i++) {
+            for (size_t i = this->size; i < n; i++) {
                 this->array[i] = this->default_constructor();
             }
         } else {
             vector_reserve(this, n);
+            // reserve allocate new memory space and copy the old elements to the new memory space
+            // need to initialize the new elements
+            for (size_t i = this->size; i < n; i++) {
+                this->array[i] = this->default_constructor();
+            }
         }
         this->size = n;
     }
-
 }
 
 size_t vector_capacity(vector *this) {
@@ -190,20 +205,28 @@ bool vector_empty(vector *this) {
 void vector_reserve(vector *this, size_t n) {
     assert(this);
     // your code here
-    if (n > this->capacity) {
-        size_t new_capacity = get_new_capacity(n);
-        // this->array = realloc(this->array, new_capacity * sizeof(void *));
-        void **new_array = (void **)calloc(new_capacity, sizeof(void *));
-        for (size_t i = 0; i < this->size; i++) {
-            new_array[i] = this->array[i];
-        }
-        free(this->array);
-        this->array = new_array;
-        
-        this->capacity = new_capacity;
+    if (n > vector_capacity(this)) {
+      size_t new_capacity = get_new_capacity(n);
+      this->array = realloc(this->array, new_capacity * sizeof(void *));
+      this->capacity = new_capacity;
     } else {
-
+        return;
     }
+
+    // if (n > this->capacity) {
+    //     size_t new_capacity = get_new_capacity(n);
+    //     // this->array = realloc(this->array, new_capacity * sizeof(void *));
+    //     void **new_array = (void **)calloc(new_capacity, sizeof(void *));
+    //     for (size_t i = 0; i < this->size; i++) {
+    //         new_array[i] = this->array[i];
+    //     }
+    //     free(this->array);
+    //     this->array = new_array;
+        
+    //     this->capacity = new_capacity;
+    // } else {
+
+    // }
 }
 
 void **vector_at(vector *this, size_t position) {
@@ -216,9 +239,8 @@ void **vector_at(vector *this, size_t position) {
 void vector_set(vector *this, size_t position, void *element) {
     assert(this);
     // your code here
-    assert(this->size > position);
-    void *cur_ele = this->array[position];
-    void **cur_arr = this->array + position;
+    void *cur_ele = vector_get(this, position);
+    void **cur_arr = vector_at(this, position);
     *cur_arr = this->copy_constructor(element);
     this->destructor(cur_ele);
 }
@@ -226,8 +248,9 @@ void vector_set(vector *this, size_t position, void *element) {
 void *vector_get(vector *this, size_t position) {
     assert(this);
     // your code here
-    assert(this->size > position);
-    return (this->array)[position];
+    // return *(vector_at(this, position));
+    printf("position: %zu\n", position);
+    return this->array[position];
 }
 
 void **vector_front(vector *this) {
@@ -242,12 +265,11 @@ void **vector_back(vector *this) {
 }
 
 void vector_push_back(vector *this, void *element) {
-    printf("%s\n", (char*)element);
     assert(this);
     // your code here
     if (this->size + 1 > this->capacity) {
         vector_reserve(this, this->size + 1);
-        this->capacity = get_new_capacity(this->size);
+        // this->capacity = get_new_capacity(this->size);
     }
     this->array[this->size] = (this->copy_constructor)(element);
     this->size += 1;
@@ -296,3 +318,4 @@ void vector_clear(vector *this) {
     }
     this->size = 0;
 }
+
