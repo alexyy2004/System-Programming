@@ -18,39 +18,64 @@ int main(int argc, char *argv[]) {
     if (argc < 4) {
         print_env_usage();
     }
-
-    int i = 1;
-    while (i < argc && strchr(argv[i], '=') != NULL) {
-        i++;
-    }
-
-    if (i == argc || strcmp(argv[i], "--") != 0) {
-        print_env_usage();
-    }
-
-    char *cmd = argv[i + 1];
-    char *args[argc - i];
-    for (int j = 0; j < argc - i; j++) {
-        args[j] = argv[j + i];
-    }
-    args[argc - i] = NULL;
-
-    char *envp[argc];
-    for (int j = 1; j < i; j++) {
-        envp[j - 1] = argv[j];
-    }
-    envp[i - 1] = NULL;
-
+    
     pid_t pid = fork();
     if (pid < 0) {
         print_fork_failed();
-    } else if (pid == 0) {
-        if (execvp(cmd, args) < 0) {
-            print_exec_failed();
+    } else if (pid == 0) { // child
+        int i = 1;
+        while (i < argc && argv[i] != NULL) {
+            if (strcmp(argv[i], "--") == 0) { // command solve
+                execvp(argv[i + 1], &argv[i + 1]);
+                print_exec_failed();
+            } else { // env solve
+                char *key = strtok(argv[i], "=");
+                char *value = strtok(NULL, "=");
+                if (value == NULL) {
+                    print_env_usage();
+                }
+                if (key == NULL) {
+                    print_env_usage();
+                }
+
+                // check key is valid
+                char *ptr_k = key;
+                while (*ptr_k) {
+                    if (!isalpha(*ptr_k) && !isdigit(*ptr_k) && *ptr_k != '_') {
+                        print_env_usage();
+                    }
+                    ptr_k++;
+                }
+                // check value is valid
+                char *ptr_v = value;
+                while (*ptr_v) {
+                    if (!isalpha(*ptr_v) && !isdigit(*ptr_v) && *ptr_v != '_') {
+                        print_env_usage();
+                    }
+                    ptr_v++;
+                }
+
+                // check value is reference or value
+                if (value[0] == '%') {
+                    value = getenv(value + 1);
+                    if (value == NULL) {
+                        print_environment_change_failed();
+                    }
+                }
+
+                printf("%s=%s\n", key, value);
+                if (setenv(key, value, 1) < 0) {
+                    print_environment_change_failed();
+                } else {
+                    setenv(key, value, 1);
+                }
+            }
+            i += 1;
         }
-    } else {
+        print_env_usage();
+    } else { // parent
         int status;
-        wait(&status);
+        waitpid(pid, &status, 0);
     }
     
     return 0;

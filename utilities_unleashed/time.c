@@ -5,30 +5,6 @@
 
  /**
   * In this lab, you will be implementing time.
-
-time – run a program and report how long it took
-So if a user enters:
-
-./time sleep 2
-then time will run sleep with the argument 2 and print how long it took in seconds:
-
-sleep 2 took 2.002345 seconds
-For more examples, you can play with Linux’s builtin time command by typing time YOURCOMMAND (time ls -l, for example) in your terminal. Be sure to add ./ to the beginning (or use the full path to your time executable file if you are in another directory), otherwise the builtin time will be called.
-
-We’ve also provided a test executable to run basic tests on your time implementation. Note that although these tests are similar to those that will be run on the autograder they are not identical, so passing locally does not guarantee you will receive full credit. It is still your responsibility to ensure you have functional code.
-
-Note that we only care about wall-clock time, and we recommend using clock_gettime with CLOCK_MONOTONIC.
-
-Pro tip: 1 second == 1,000,000,000 nanoseconds.
-
-Nota bene:
-You may not use the existing time program.
-You must use fork, exec, and wait (no other solutions will be accepted).
-If the child process does not terminate successfully (where its exit status is non-zero), you should exit with status 1 without printing the time.
-We will only run time with one program.
-The commands we will run can take any number of arguments.
-Do your time computations with double-precision floating pointer numbers (double) rather that single-precision (float).
-We have provided functions in format.h that we expect you to use wherever appropriate.
   */
 
 #include <stdio.h>
