@@ -46,14 +46,6 @@ int main(int argc, char *argv[]) {
                     }
                     ptr_k++;
                 }
-                // check value is valid
-                char *ptr_v = value;
-                while (*ptr_v) {
-                    if (!isalpha(*ptr_v) && !isdigit(*ptr_v) && *ptr_v != '_') {
-                        print_env_usage();
-                    }
-                    ptr_v++;
-                }
 
                 // check value is reference or value
                 if (value[0] == '%') {
@@ -63,12 +55,19 @@ int main(int argc, char *argv[]) {
                     }
                 }
 
-                printf("%s=%s\n", key, value);
+                // check value is valid
+                char *ptr_v = value;
+                while (*ptr_v) {
+                    if (!isalpha(*ptr_v) && !isdigit(*ptr_v) && *ptr_v != '_') {
+                        print_env_usage();
+                    }
+                    ptr_v++;
+                }
+
+
                 if (setenv(key, value, 1) < 0) {
                     print_environment_change_failed();
-                } else {
-                    setenv(key, value, 1);
-                }
+                } 
             }
             i += 1;
         }
@@ -80,3 +79,4 @@ int main(int argc, char *argv[]) {
     
     return 0;
 }
+
