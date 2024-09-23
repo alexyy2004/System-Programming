@@ -209,13 +209,19 @@ void shell_loop() {
 
 // Execute the given command
 void execute_command(char **args) {
+    if (args[0] == NULL) {
+        return;
+    }
     pid_t pid = fork();
     if (pid == 0) {
         // In child process
-        if (execvp(args[0], args) == -1) {
-            print_exec_failed(args[0]);
-            exit(EXIT_FAILURE);
-        }
+        // if (execvp(args[0], args) == -1) {
+        //     print_exec_failed(args[0]);
+        //     exit(EXIT_FAILURE);
+        // }
+        execvp(args[0], args);
+        print_exec_failed(args[0]);
+        exit(1);
     } else if (pid < 0) {
         // Fork failed
         print_fork_failed();
