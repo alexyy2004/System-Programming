@@ -211,11 +211,11 @@ void execute_command(char **args, char *input) {
 
     // check if the command contains a logical operator
     if (strstr(input, "&&") != NULL || strstr(input, "||") != NULL || strstr(input, ";") != NULL) {
-        printf("args[0]: %s\n", args[0]);
-        printf("args[1]: %s\n", args[1]);
-        printf("args[2]: %s\n", args[2]);
-        printf("input: %s\n", input);
-        printf("success to execute logical\n");
+        // printf("args[0]: %s\n", args[0]);
+        // printf("args[1]: %s\n", args[1]);
+        // printf("args[2]: %s\n", args[2]);
+        // printf("input: %s\n", input);
+        // printf("success to execute logical\n");
         handle_logical_operators(args);
         return;
     }
@@ -300,21 +300,21 @@ int external_command(char **args) {
             print_wait_failed();
             exit(1);
         }
-        if (WIFEXITED(status) && WEXITSTATUS(status) == 1) {
-            printf("abfdbhfiabfbhasl");
-            return 1;
-        }else{
-            return 0;
-        }
+        // if (WIFEXITED(status) && WEXITSTATUS(status) == 1) {
+        //     printf("abfdbhfiabfbhasl");
+        //     return 1;
+        // }else{
+        //     return 0;
+        // }
         // if (WIFEXITED(status) && WEXITSTATUS(status) == 1) {
         //     print_exec_failed(args[0]);
         //     return 1;
         // }
-        // if (WIFEXITED(status)) {
-        //     return WEXITSTATUS(status);
-        // }else{
-        //     return 1;
-        // }
+        if (WIFEXITED(status)) {
+            return WEXITSTATUS(status);
+        }else{
+            return 1;
+        }
     }
     return 1;
 }
@@ -474,14 +474,15 @@ void handle_logical_operators(char **args) {
     int temp = 0;
     while (args[temp] != NULL) {
         temp++;
-        printf("temp[%d]: %s\n", temp, args[temp]);
+        // printf("temp[%d]: %s\n", temp, args[temp]);
     }
-    printf("temp: %d\n", temp);
+    // printf("temp: %d\n", temp);
     int i = 0;
     int status;
 
     while (args[i] != NULL) {
         if (!strcmp(args[i], "&&")) {
+            printf("1--------------------\n");
             //print args
             // for (int j = 0; j < i; j++) {
             //     printf("args[%d]: %s\n", j, args[j]);
@@ -495,7 +496,7 @@ void handle_logical_operators(char **args) {
             char** com1 = malloc((i+1) * sizeof(char *)) ;
             for (int j = 0; j < i; j++) {
                 com1[j] = strdup(args[j]);
-                printf("com1[%d]: %s\n", j, com1[j]);       
+                // printf("com1[%d]: %s\n", j, com1[j]);       
             }
             com1[i] = NULL;
 
@@ -524,13 +525,10 @@ void handle_logical_operators(char **args) {
 
             waitpid(-1, &status, 0);  // Wait for the first command to complete
 
-            // // Only run the next command if the first succeeds (exit status == 0)
-            // if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-            //     // execute_command(&args[i + 1]);
-            //     external_command(&args[i + 1]);
-            // }
+
             return;
         } else if (strcmp(args[i], "||") == 0) {
+            printf("2--------------------\n");
             args[i] = NULL;  // Split the command at '&&'
             // execute_command(args);  // Execute the first command
             // com1  is command before && com2 is command after &&
@@ -539,7 +537,7 @@ void handle_logical_operators(char **args) {
             char** com1 = malloc((i+1) * sizeof(char *)) ;
             for (int j = 0; j < i; j++) {
                 com1[j] = strdup(args[j]);
-                printf("com1[%d]: %s\n", j, com1[j]);       
+                //printf("com1[%d]: %s\n", j, com1[j]);       
             }
             com1[i] = NULL;
 
@@ -548,7 +546,7 @@ void handle_logical_operators(char **args) {
             // copy the command after &&
             for (int j = i + 1; j < temp; j++) {
                 com2[j - i - 1] = strdup(args[j]);
-                printf("com2[%d]: %s\n", j - i - 1, com2[j - i - 1]);
+                //printf("com2[%d]: %s\n", j - i - 1, com2[j - i - 1]);
             }
             com2[temp - i - 1] = NULL;
             // print com1
@@ -574,28 +572,14 @@ void handle_logical_operators(char **args) {
             //     external_command(&args[i + 1]);
             // }
             return;
-        } else if (strcmp(args[i], ";") == 0) {
-            // args[i] = NULL;  // Split the command at ';'
-            // // execute_command(args);  // Execute the first command
-            // external_command(args);
-
-            // // waitpid(-1, &status, 0);  // Wait for the first command to complete
-
-            // // Always run the next command, regardless of the exit status
-            // // execute_command(&args[i + 1]);
-            // external_command(&args[i + 1]);
-            // return;
-            args[i] = NULL;  // Split the command at '&&'
-            // execute_command(args);  // Execute the first command
-            // com1  is command before && com2 is command after &&
-
-            // printf("temp+1[%d]: %s\n", temp+ 1, args[temp+ 1]);
+        } else if (args[i][strlen(args[i]) - 1] == ';') {
+            printf("3--------------------\n");
             char** com1 = malloc((i+2) * sizeof(char *)) ;
-            for (int j = 0; j < i; j++) {
+            for (int j = 0; j <= i; j++) {
                 com1[j] = strdup(args[j]);
                 printf("com1[%d]: %s\n", j, com1[j]);       
             }
-            com1[i] = "\0";
+            com1[i][strlen(args[i]) - 1] = '\0';
             com1[i+1] = NULL;
 
 
