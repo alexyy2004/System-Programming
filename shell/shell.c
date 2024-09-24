@@ -30,10 +30,11 @@ typedef struct process {
 static vector *history;
 static vector *process_list;  // Vector to store active processes
 static char *history_file = NULL;
+static char *history_path = NULL;
 
 // Function declarations
 void shell_loop();
-void execute_command(char **args);
+void execute_command(char **args, char *input);
 int shell_cd(char **args);
 void handle_logical_operators(char **args);
 void add_to_history(const char *command);
@@ -46,6 +47,8 @@ void run_history_cmd(size_t index);
 void run_prefix_cmd(const char *prefix);
 void add_process(char *command, pid_t pid);
 void remove_process(pid_t pid);
+int external_command(char **args);
+
 
 // Signal handler for SIGINT (Ctrl+C)
 void handle_sigint(int sig) {
@@ -87,7 +90,7 @@ int shell(int argc, char *argv[]) {
                 return EXIT_FAILURE;
         }
     }
-
+    
     // If script file is provided but not found, print error and exit
     if (script_file && access(script_file, F_OK) == -1) {
         print_script_file_error();
@@ -98,43 +101,29 @@ int shell(int argc, char *argv[]) {
     if (script_file) {
         FILE *file = fopen(script_file, "r");
         if (!file) {
+            printf("Unable to open script file!\n");
             print_script_file_error();
             return EXIT_FAILURE;
         }
-        // char line[BUFFER_SIZE];
-        // while (fgets(line, sizeof(line), file)) {
-        //     print_command(line);
-        //     add_to_history(line);
-        //     char **args = parse_input(line);
-        //     execute_command(args);
-        //     free(args);
-        // }
-        char *buffer_h = NULL;
-        size_t size_h = 0;
-        ssize_t bytes_read_h;
-        while (1) {
-            bytes_read_h = getline(&buffer_h,&size_h, file);
-            if (bytes_read_h == -1) break;
-            if (bytes_read_h>0 && buffer_h[bytes_read_h-1] == '\n') {
-                buffer_h[bytes_read_h-1] = '\0';
-                vector_push_back(history, buffer_h);
-            }
-        }
-        free(buffer_h);
-        fclose(file);
 
-        // char* line = NULL;
-        // while (fgets(line, sizeof(line), file)) {
-        //     print_command(line);
-        //     add_to_history(line);
-        //     char **args = parse_input(line);
-        //     execute_command(args);
-        //     free(args);
-        // }
-        // fclose(file);
+        char *line = NULL; 
+        size_t len = 0;
+        ssize_t read; 
+        while ((read = getline(&line, &len, file)) != -1) {
+            print_command(line);
+            add_to_history(line);
+            char **args = parse_input(line);
+            // printf("args[0]: %s\n", args[0]);
+            // printf("args[1]: %s\n", args[1]);
+            execute_command(args, line);
+            free(args);
+        }
+        free(line);
+        fclose(file);
     }
 
     // Start the interactive shell loop
+    
     shell_loop();
 
     // Cleanup history and process list before exit
@@ -164,6 +153,7 @@ void shell_loop() {
         }
 
         input = strdup(buffer);  // Duplicate buffer to preserve input
+        
         if (input == NULL || strcmp(input, "\n") == 0) {
             free(input);
             continue;  // Ignore empty input
@@ -180,10 +170,12 @@ void shell_loop() {
 
         // Handle built-in commands
         if (strcmp(args[0], "cd") == 0) {
+            add_to_history(buffer);
             if (!shell_cd(args)) {
                 print_no_directory(args[1]);
             }
         } else if (strcmp(args[0], "exit") == 0) {
+            free(args);
             break;
         } else if (strcmp(args[0], "!history") == 0) {
             print_history_cmd();
@@ -192,13 +184,17 @@ void shell_loop() {
             run_history_cmd(index);
         } else if (args[0][0] == '!') {
             run_prefix_cmd(args[0] + 1);
+            // run_prefix_cmd(args);
         } else {
-            handle_logical_operators(args);  // Handle external commands and logical operators
+            // handle_logical_operators(args);  // Handle external commands and logical operators
+            add_to_history(buffer);  // Add command to history if not !history
+            execute_command(args, buffer);
+            // add_to_history(buffer);  // Add command to history if not !history
         }
 
-        if (args[0] != NULL && strcmp(args[0], "!history") != 0) {
-            add_to_history(buffer);  // Add command to history if not !history
-        }
+        // if (args[0] != NULL && strcmp(args[0], "!history") != 0) {
+        //     add_to_history(buffer);  // Add command to history if not !history
+        // }
 
         free(args);
         free(input);
@@ -208,10 +204,73 @@ void shell_loop() {
 }
 
 // Execute the given command
-void execute_command(char **args) {
+void execute_command(char **args, char *input) {
     if (args[0] == NULL) {
         return;
     }
+
+    // check if the command contains a logical operator
+    if (strstr(input, "&&") != NULL || strstr(input, "||") != NULL || strstr(input, ";") != NULL) {
+        printf("args[0]: %s\n", args[0]);
+        printf("args[1]: %s\n", args[1]);
+        printf("args[2]: %s\n", args[2]);
+        printf("input: %s\n", input);
+        printf("success to execute logical\n");
+        handle_logical_operators(args);
+        return;
+    }
+
+    if (strcmp(args[0], "cd") == 0) {
+        if (!shell_cd(args)) {
+            print_no_directory(args[1]);
+        }
+        return;
+    }
+
+    if (strcmp(args[0], "exit") == 0) {
+        exit(EXIT_SUCCESS);
+    }
+
+    if (strcmp(args[0], "!history") == 0) {
+        print_history_cmd();
+        return;
+    }
+
+    if (args[0][0] == '#') {
+        size_t index = atoi(&args[0][1]);
+        run_history_cmd(index);
+        return;
+    }
+
+    if (args[0][0] == '!') {
+        run_prefix_cmd(args[0] + 1);
+        return;
+    }
+
+    // // check if the command contains a logical operator
+    // if (strstr(input, "&&") != NULL || strstr(input, "||") != NULL || strstr(input, ";") != NULL) {
+    //     printf("args[0]: %s\n", args[0]);
+    //     printf("args[1]: %s\n", args[1]);
+    //     printf("input: %s\n", input);
+    //     printf("success to execute logical\n");
+    //     handle_logical_operators(args);
+    //     return;
+    // }
+    // printf("args[0]: %s\n", args[0]);
+    // printf("args[1]: %s\n", args[1]);
+    // printf("input: %s\n", input);
+    // printf("input: %s\n", input+1);
+    // printf("input: %s\n", input+2);
+    // printf("fail to execute logical\n");
+    //add_to_history(input);  
+    external_command(args);
+}
+
+int external_command(char **args) {
+    if (args[0] == NULL) {
+        return 1;
+    }
+    fflush(stdout);
     pid_t pid = fork();
     if (pid == 0) {
         // In child process
@@ -219,20 +278,47 @@ void execute_command(char **args) {
         //     print_exec_failed(args[0]);
         //     exit(EXIT_FAILURE);
         // }
+        // printf("child execute");
+        print_command_executed(getpid());
         execvp(args[0], args);
         print_exec_failed(args[0]);
+        printf("exit failure\n");
         exit(1);
-    } else if (pid < 0) {
-        // Fork failed
+    }else if (pid < 0) {
         print_fork_failed();
+        exit(1);
     } else {
         // In parent process
-        print_command_executed(pid);
-        add_process(args[0], pid);  // Track the process
-        waitpid(pid, NULL, 0);  // Wait for child to complete
-        remove_process(pid);  // Remove process after completion
+        // printf("parent execute");
+        
+        // add_process(args[0], pid);  // Track the process
+        // waitpid(pid, NULL, 0);  // Wait for child to complete
+        // remove_process(pid);  // Remove process after completion
+        
+        int status;
+        if (waitpid(pid, &status, 0) == -1) {
+            print_wait_failed();
+            exit(1);
+        }
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 1) {
+            printf("abfdbhfiabfbhasl");
+            return 1;
+        }else{
+            return 0;
+        }
+        // if (WIFEXITED(status) && WEXITSTATUS(status) == 1) {
+        //     print_exec_failed(args[0]);
+        //     return 1;
+        // }
+        // if (WIFEXITED(status)) {
+        //     return WEXITSTATUS(status);
+        // }else{
+        //     return 1;
+        // }
     }
+    return 1;
 }
+
 
 // Change directory (cd command)
 int shell_cd(char **args) {
@@ -285,7 +371,8 @@ void run_history_cmd(size_t index) {
         print_invalid_index();
         return;
     }
-    char *cmd = vector_get(history, index);  // Get the command from history
+    add_to_history(vector_get(history, index));  // Add the command to history
+    char *cmd = strdup(vector_get(history, index));  // Get the command from history
     print_command(cmd);
     if (strstr(cmd, "cd ") != NULL) {
         char **args = parse_input(cmd);
@@ -296,18 +383,23 @@ void run_history_cmd(size_t index) {
         return;
     } else {
         char **args = parse_input(cmd);
-        execute_command(args);
+        execute_command(args, cmd);
         free(args);
     }
 }
 
 // Run the last command with a given prefix
 void run_prefix_cmd(const char *prefix) {
-    for (ssize_t i = vector_size(history) - 1; i >= 0; i--) {
+    for (int i = vector_size(history) - 1; i >= 0; i--) {
         if (strncmp(vector_get(history, i), prefix, strlen(prefix)) == 0) {
             print_command(vector_get(history, i));
-            char **args = parse_input(vector_get(history, i));
-            execute_command(args);
+            char *input = strdup(vector_get(history, i));
+            char **args = parse_input(input);
+            // printf("Here's the history command: %s\n", (char *)vector_get(history, i));
+            // puts(vector_get(history, i));
+            add_to_history(vector_get(history, i));
+            execute_command(args, vector_get(history, i));
+            // add_to_history(vector_get(history, i));
             free(args);
             return;
         }
@@ -317,8 +409,10 @@ void run_prefix_cmd(const char *prefix) {
 
 // Load history from a file
 void load_history(const char *filename) {
+    char * fff = strdup(filename);
     if (!filename) return;
-    FILE *file = fopen(filename, "r");
+    history_path = get_full_path(fff);
+    FILE *file = fopen(history_path, "r");
     if (!file) {
         print_history_file_error();
         return;
@@ -333,12 +427,13 @@ void load_history(const char *filename) {
 // Save history to a file
 void save_history(const char *filename) {
     if (!filename) return;
-    FILE *file = fopen(filename, "a");
+    FILE *file = fopen(history_path, "a");
     if (!file) {
         print_history_file_error();
         return;
     }
     for (size_t i = 0; i < vector_size(history); i++) {
+        printf("%s", (char *)vector_get(history, i));
         fprintf(file, "%s", (char *)vector_get(history, i));  // Save each command from the history
     }
     fclose(file);
@@ -376,45 +471,160 @@ char **parse_input(char *input) {
 
 // Handle logical operators
 void handle_logical_operators(char **args) {
+    int temp = 0;
+    while (args[temp] != NULL) {
+        temp++;
+        printf("temp[%d]: %s\n", temp, args[temp]);
+    }
+    printf("temp: %d\n", temp);
     int i = 0;
     int status;
 
     while (args[i] != NULL) {
-        if (strcmp(args[i], "&&") == 0) {
+        if (!strcmp(args[i], "&&")) {
+            //print args
+            // for (int j = 0; j < i; j++) {
+            //     printf("args[%d]: %s\n", j, args[j]);
+            // }
+            
             args[i] = NULL;  // Split the command at '&&'
-            execute_command(args);  // Execute the first command
+            // execute_command(args);  // Execute the first command
+            // com1  is command before && com2 is command after &&
+
+            // printf("temp+1[%d]: %s\n", temp+ 1, args[temp+ 1]);
+            char** com1 = malloc((i+1) * sizeof(char *)) ;
+            for (int j = 0; j < i; j++) {
+                com1[j] = strdup(args[j]);
+                printf("com1[%d]: %s\n", j, com1[j]);       
+            }
+            com1[i] = NULL;
+
+
+            char **com2 = malloc((temp - i) * sizeof(char *));
+            // copy the command after &&
+            for (int j = i + 1; j < temp; j++) {
+                com2[j - i - 1] = strdup(args[j]);
+                //printf("com2[%d]: %s\n", j - i - 1, com2[j - i - 1]);
+            }
+            com2[temp - i - 1] = NULL;
+            // print com1
+
+            // print com2
+            // for(int j = 0; j < temp - i - 1; j++) {
+            //     printf("com2[%d]: %s\n", j, com2[j]);
+            // }
+            //printf("*");
+            int a = external_command(com1);
+            printf("a: %d\n", a);
+            if(!a) {
+                printf("*");
+                external_command(com2);
+            }
+
 
             waitpid(-1, &status, 0);  // Wait for the first command to complete
 
-            // Only run the next command if the first succeeds (exit status == 0)
-            if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-                execute_command(&args[i + 1]);
-            }
+            // // Only run the next command if the first succeeds (exit status == 0)
+            // if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            //     // execute_command(&args[i + 1]);
+            //     external_command(&args[i + 1]);
+            // }
             return;
         } else if (strcmp(args[i], "||") == 0) {
-            args[i] = NULL;  // Split the command at '||'
-            execute_command(args);  // Execute the first command
+            args[i] = NULL;  // Split the command at '&&'
+            // execute_command(args);  // Execute the first command
+            // com1  is command before && com2 is command after &&
+
+            // printf("temp+1[%d]: %s\n", temp+ 1, args[temp+ 1]);
+            char** com1 = malloc((i+1) * sizeof(char *)) ;
+            for (int j = 0; j < i; j++) {
+                com1[j] = strdup(args[j]);
+                printf("com1[%d]: %s\n", j, com1[j]);       
+            }
+            com1[i] = NULL;
+
+
+            char **com2 = malloc((temp - i) * sizeof(char *));
+            // copy the command after &&
+            for (int j = i + 1; j < temp; j++) {
+                com2[j - i - 1] = strdup(args[j]);
+                printf("com2[%d]: %s\n", j - i - 1, com2[j - i - 1]);
+            }
+            com2[temp - i - 1] = NULL;
+            // print com1
+
+            // print com2
+            // for(int j = 0; j < temp - i - 1; j++) {
+            //     printf("com2[%d]: %s\n", j, com2[j]);
+            // }
+            //printf("*");
+            int a = external_command(com1);
+            printf("a: %d\n", a);
+            if(a) {
+                printf("*");
+                external_command(com2);
+            }
+
 
             waitpid(-1, &status, 0);  // Wait for the first command to complete
 
-            // Only run the next command if the first fails (exit status != 0)
-            if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
-                execute_command(&args[i + 1]);
-            }
+            // // Only run the next command if the first succeeds (exit status == 0)
+            // if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            //     // execute_command(&args[i + 1]);
+            //     external_command(&args[i + 1]);
+            // }
             return;
         } else if (strcmp(args[i], ";") == 0) {
-            args[i] = NULL;  // Split the command at ';'
-            execute_command(args);  // Execute the first command
+            // args[i] = NULL;  // Split the command at ';'
+            // // execute_command(args);  // Execute the first command
+            // external_command(args);
+
+            // // waitpid(-1, &status, 0);  // Wait for the first command to complete
+
+            // // Always run the next command, regardless of the exit status
+            // // execute_command(&args[i + 1]);
+            // external_command(&args[i + 1]);
+            // return;
+            args[i] = NULL;  // Split the command at '&&'
+            // execute_command(args);  // Execute the first command
+            // com1  is command before && com2 is command after &&
+
+            // printf("temp+1[%d]: %s\n", temp+ 1, args[temp+ 1]);
+            char** com1 = malloc((i+2) * sizeof(char *)) ;
+            for (int j = 0; j < i; j++) {
+                com1[j] = strdup(args[j]);
+                printf("com1[%d]: %s\n", j, com1[j]);       
+            }
+            com1[i] = "\0";
+            com1[i+1] = NULL;
+
+
+            char **com2 = malloc((temp - i) * sizeof(char *));
+            // copy the command after &&
+            for (int j = i + 1; j < temp; j++) {
+                com2[j - i - 1] = strdup(args[j]);
+                printf("com2[%d]: %s\n", j - i - 1, com2[j - i - 1]);
+            }
+            com2[temp - i - 1] = NULL;
+            // print com1
+
+            // print com2
+            // for(int j = 0; j < temp - i - 1; j++) {
+            //     printf("com2[%d]: %s\n", j, com2[j]);
+            // }
+            //printf("*");
+            external_command(com1);
+            printf("*");
+            external_command(com2);
+
 
             waitpid(-1, &status, 0);  // Wait for the first command to complete
-
-            // Always run the next command, regardless of the exit status
-            execute_command(&args[i + 1]);
             return;
         }
         i++;
     }
 
     // If no logical operator, execute the command normally
-    execute_command(args);
+    // execute_command(args);
+    external_command(args);
 }
