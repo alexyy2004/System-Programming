@@ -73,24 +73,26 @@ void *mini_realloc(void *payload, size_t request_size, const char *filename,
         return NULL;
     }
 
-    meta_data *new_meta_data = realloc(curr, sizeof(meta_data) + request_size);
-    if (new_meta_data == NULL) {
-        return NULL;
-    }
+    meta_data *new_meta_data = NULL;
+    // if (new_meta_data == NULL) {
+    //     return NULL;
+    // }
     
     if (curr->request_size < request_size) {
-        total_memory_requested += request_size - curr->request_size;
+        total_memory_requested = total_memory_requested + (request_size - curr->request_size);
+        new_meta_data = realloc(curr, sizeof(meta_data) + request_size);
     } else {
-        total_memory_freed += curr->request_size - request_size;
+        total_memory_freed = total_memory_freed + (curr->request_size - request_size);
+        new_meta_data = realloc(curr, sizeof(meta_data) + request_size);
     }
 
     if (prev == NULL) {
         head = new_meta_data;
-        free(curr);
+        // free(curr);
     } else {
         prev->next = new_meta_data;
         new_meta_data->next = curr->next;
-        free(curr);
+        // free(curr);
     }
 
     new_meta_data->request_size = request_size;
