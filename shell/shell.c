@@ -272,6 +272,21 @@ void execute_command(char **args, char *input) {
 }
 
 int external_command(char **args) {
+    if(!strcmp(args[0], "cd")){
+        if (args[1] == NULL) {
+            print_no_directory("");
+            return 1;
+        }
+        // printf("is not cd\n");
+        if (chdir(args[1]) == -1) {
+            print_no_directory(args[1]);
+            return 1;
+        }
+        return 0;
+    }
+    // printf("args[0]: %s\n", args[0]);
+    // printf("args[1]: %s\n", args[1]);
+
     if (args[0] == NULL) {
         return 1;
     }
@@ -287,7 +302,7 @@ int external_command(char **args) {
         print_command_executed(getpid());
         execvp(args[0], args);
         print_exec_failed(args[0]);
-        printf("exit failure\n");
+        // printf("exit failure\n");
         exit(1);
     }else if (pid < 0) {
         print_fork_failed();
@@ -379,24 +394,27 @@ void run_history_cmd(size_t index) {
     add_to_history(vector_get(history, index));  // Add the command to history
     char *cmd = strdup(vector_get(history, index));  // Get the command from history
     print_command(cmd);
-    if (strstr(cmd, "cd ") != NULL) {
-        char **args = parse_input(cmd);
-        if (!shell_cd(args)) {
-            print_no_directory(args[1]);
-        }
-        free(args);
-        return;
-    } else {
-        char **args = parse_input(cmd);
-        int i = 0;
-        while (args[i] != NULL) {
-            printf("args[%d]: %s\n", i, args[i]);
-            i++;
-        }
-        printf("cmd: %s\n", cmd);
-        execute_command(args, vector_get(history, index));
-        free(args);
-    }
+    // if (strstr(cmd, "cd ") != NULL) {
+    //     char **args = parse_input(cmd);
+    //     if (!shell_cd(args)) {
+    //         print_no_directory(args[1]);
+    //     }
+    //     free(args);
+    //     return;
+    // } else {
+    //     char **args = parse_input(cmd);
+    //     // int i = 0;
+    //     // while (args[i] != NULL) {
+    //     //     printf("args[%d]: %s\n", i, args[i]);
+    //     //     i++;
+    //     // }
+    //     // printf("cmd: %s\n", cmd);
+    //     execute_command(args, vector_get(history, index));
+    //     free(args);
+    // }
+    char **args = parse_input(cmd);
+    execute_command(args, vector_get(history, index));
+    free(args);
 }
 
 // Run the last command with a given prefix
@@ -516,7 +534,7 @@ void handle_logical_operators(char **args) {
             // copy the command after &&
             for (int j = i + 1; j < temp; j++) {
                 com2[j - i - 1] = strdup(args[j]);
-                //printf("com2[%d]: %s\n", j - i - 1, com2[j - i - 1]);
+                // printf("com2[%d]: %s\n", j - i - 1, com2[j - i - 1]);
             }
             com2[temp - i - 1] = NULL;
             // print com1
