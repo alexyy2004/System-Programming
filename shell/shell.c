@@ -3,6 +3,10 @@
  * CS 341 - Fall 2024
  */
 
+/*
+I use Chatgpt to help me debug the operator part and read file part.
+*/
+
 #include "format.h"
 #include "shell.h"
 #include "vector.h"
@@ -181,6 +185,7 @@ void shell_loop() {
             print_history_cmd();
         } else if (args[0][0] == '#') {
             size_t index = atoi(&args[0][1]);
+            // printf("index: %ld\n", index);
             run_history_cmd(index);
         } else if (args[0][0] == '!') {
             run_prefix_cmd(args[0] + 1);
@@ -383,7 +388,13 @@ void run_history_cmd(size_t index) {
         return;
     } else {
         char **args = parse_input(cmd);
-        execute_command(args, cmd);
+        int i = 0;
+        while (args[i] != NULL) {
+            printf("args[%d]: %s\n", i, args[i]);
+            i++;
+        }
+        printf("cmd: %s\n", cmd);
+        execute_command(args, vector_get(history, index));
         free(args);
     }
 }
@@ -482,7 +493,7 @@ void handle_logical_operators(char **args) {
 
     while (args[i] != NULL) {
         if (!strcmp(args[i], "&&")) {
-            printf("1--------------------\n");
+            // printf("1--------------------\n");
             //print args
             // for (int j = 0; j < i; j++) {
             //     printf("args[%d]: %s\n", j, args[j]);
@@ -516,9 +527,9 @@ void handle_logical_operators(char **args) {
             // }
             //printf("*");
             int a = external_command(com1);
-            printf("a: %d\n", a);
+            // printf("a: %d\n", a);
             if(!a) {
-                printf("*");
+                // printf("*");
                 external_command(com2);
             }
 
@@ -528,7 +539,7 @@ void handle_logical_operators(char **args) {
 
             return;
         } else if (strcmp(args[i], "||") == 0) {
-            printf("2--------------------\n");
+            // printf("2--------------------\n");
             args[i] = NULL;  // Split the command at '&&'
             // execute_command(args);  // Execute the first command
             // com1  is command before && com2 is command after &&
@@ -557,9 +568,9 @@ void handle_logical_operators(char **args) {
             // }
             //printf("*");
             int a = external_command(com1);
-            printf("a: %d\n", a);
+            // printf("a: %d\n", a);
             if(a) {
-                printf("*");
+                // printf("*");
                 external_command(com2);
             }
 
@@ -573,11 +584,11 @@ void handle_logical_operators(char **args) {
             // }
             return;
         } else if (args[i][strlen(args[i]) - 1] == ';') {
-            printf("3--------------------\n");
+            // printf("3--------------------\n");
             char** com1 = malloc((i+2) * sizeof(char *)) ;
             for (int j = 0; j <= i; j++) {
                 com1[j] = strdup(args[j]);
-                printf("com1[%d]: %s\n", j, com1[j]);       
+                // printf("com1[%d]: %s\n", j, com1[j]);       
             }
             com1[i][strlen(args[i]) - 1] = '\0';
             com1[i+1] = NULL;
@@ -587,7 +598,7 @@ void handle_logical_operators(char **args) {
             // copy the command after &&
             for (int j = i + 1; j < temp; j++) {
                 com2[j - i - 1] = strdup(args[j]);
-                printf("com2[%d]: %s\n", j - i - 1, com2[j - i - 1]);
+                // printf("com2[%d]: %s\n", j - i - 1, com2[j - i - 1]);
             }
             com2[temp - i - 1] = NULL;
             // print com1
@@ -598,7 +609,7 @@ void handle_logical_operators(char **args) {
             // }
             //printf("*");
             external_command(com1);
-            printf("*");
+            // printf("*");
             external_command(com2);
 
 
