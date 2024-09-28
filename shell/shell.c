@@ -284,95 +284,179 @@ void execute_command(char **args, char *input) {
     external_command(args);
 }
 
+// int external_command(char **args) {
+//     int background = 0;
+//     int len = 0;
+//     while (args[len] != NULL) {
+//         len++;
+//     }
+//     if (*args[len - 1] == '&') {
+//         args[len - 1] = NULL;  // Remove '&' from the command
+//         background = 1;
+//     }
+
+//     if(!strcmp(args[0], "cd")){
+//         if (args[1] == NULL) {
+//             print_no_directory("");
+//             return 1;
+//         }
+//         // printf("is not cd\n");
+//         if (chdir(args[1]) == -1) {
+//             print_no_directory(args[1]);
+//             return 1;
+//         }
+//         return 0;
+//     }
+
+//     if (args[0] == NULL) {
+//         return 1;
+//     }
+//     fflush(stdout);
+//     pid_t pid = fork();
+//     if (pid == 0) {
+//         // In child process
+//         // check if the command is a background process
+//         // printf("args[0]: %s\n", args[0]);
+//         // printf("args[1]: %s\n", args[1]);
+//         // int len = 0;
+//         // while (args[len] != NULL) {
+//         //     len++;
+//         // }
+//         // setpgid(0, 0);  // Set the process group ID in the child process
+//         // if (*args[len - 1] == '&') {
+//         //     args[len - 1] = NULL;  // Remove '&' from the command
+//         // }
+//         print_command_executed(getpid());
+//         execvp(args[0], args);
+//         print_exec_failed(args[0]);
+//         exit(1);
+//         // print_command_executed(getpid());
+//         // execvp(args[0], args);
+//         // print_exec_failed(args[0]);
+//         // // printf("exit failure\n");
+//         // exit(1);
+//     }else if (pid < 0) {
+//         print_fork_failed();
+//         exit(1);
+//     } else {
+//         // In parent process
+//         // check background process
+//         int length = 0;
+//         while (args[length] != NULL) {
+//             length++;
+//         }
+//         printf("in background process\n");
+//         printf("args[0]: %s\n", args[0]);
+//         printf("args: %s\n", args[length - 1]);
+//         if (background) {
+//             // *args[length - 1] = '\0';  // Remove '&' from the command
+//             // setpgid(0, 0);  // Set the process group ID to the process ID
+//             // printf("check background process\n");
+//             // add_process(args[0], pid);  // Add the process to the list
+//             // return 0;
+//             add_process(args[0], pid);  // Add the process to the list
+//             return 0;
+//         } else {
+//             // Wait for the child process to complete
+//             int status;
+//             if (waitpid(pid, &status, 0) == -1) {
+//                 print_wait_failed();
+//                 exit(1);
+//             }
+
+//             if (WIFEXITED(status)) {
+//                 return WEXITSTATUS(status);
+//             }else{
+//                 return 1;
+//             }
+//         }
+//     }
+//     return 1;
+// }
+
 int external_command(char **args) {
     int background = 0;
     int len = 0;
+    
+    // Determine the length of args
     while (args[len] != NULL) {
         len++;
     }
-    if (*args[len - 1] == '&') {
-        args[len - 1] = NULL;  // Remove '&' from the command
+    
+    // Check if the last argument is "&"
+    if (len > 0 && strcmp(args[len - 1], "&") == 0) {
+        args[len - 1] = NULL;  // Remove '&' from arguments
         background = 1;
     }
-
-    if(!strcmp(args[0], "cd")){
+    
+    // Handle "cd" command
+    if (!strcmp(args[0], "cd")) {
         if (args[1] == NULL) {
             print_no_directory("");
             return 1;
         }
-        // printf("is not cd\n");
         if (chdir(args[1]) == -1) {
             print_no_directory(args[1]);
             return 1;
         }
         return 0;
     }
-
+    
     if (args[0] == NULL) {
         return 1;
     }
-    fflush(stdout);
+    
+    fflush(stdout);  // Flush output before forking
     pid_t pid = fork();
+    
     if (pid == 0) {
-        // In child process
-        // check if the command is a background process
-        // printf("args[0]: %s\n", args[0]);
-        // printf("args[1]: %s\n", args[1]);
-        // int len = 0;
-        // while (args[len] != NULL) {
-        //     len++;
-        // }
-        // setpgid(0, 0);  // Set the process group ID in the child process
-        // if (*args[len - 1] == '&') {
-        //     args[len - 1] = NULL;  // Remove '&' from the command
-        // }
+        // Child process
+        
+        if (background) {
+            // Set a new process group for background processes
+            if (setpgid(0, 0) < 0) {
+                perror("setpgid failed");
+                exit(1);
+            }
+        }
+        
         print_command_executed(getpid());
         execvp(args[0], args);
         print_exec_failed(args[0]);
         exit(1);
-        // print_command_executed(getpid());
-        // execvp(args[0], args);
-        // print_exec_failed(args[0]);
-        // // printf("exit failure\n");
-        // exit(1);
-    }else if (pid < 0) {
+    } else if (pid < 0) {
+        // Fork failed
         print_fork_failed();
         exit(1);
     } else {
-        // In parent process
-        // check background process
-        int length = 0;
-        while (args[length] != NULL) {
-            length++;
-        }
-        printf("in background process\n");
-        printf("args[0]: %s\n", args[0]);
-        printf("args: %s\n", args[length - 1]);
+        // Parent process
+        
         if (background) {
-            // *args[length - 1] = '\0';  // Remove '&' from the command
-            // setpgid(0, 0);  // Set the process group ID to the process ID
-            // printf("check background process\n");
-            // add_process(args[0], pid);  // Add the process to the list
-            // return 0;
+            // Handle background process
+            printf("in background process\n");
+            printf("args[0]: %s\n", args[0]);
+            printf("args: &\n");  // Since '&' has been removed
             add_process(args[0], pid);  // Add the process to the list
             return 0;
         } else {
-            // Wait for the child process to complete
+            // Handle foreground process
             int status;
             if (waitpid(pid, &status, 0) == -1) {
                 print_wait_failed();
                 exit(1);
             }
-
+    
             if (WIFEXITED(status)) {
                 return WEXITSTATUS(status);
-            }else{
+            } else {
                 return 1;
             }
         }
     }
+    
     return 1;
 }
+
 
 
 // Change directory (cd command)
