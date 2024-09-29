@@ -375,6 +375,81 @@ void execute_command(char **args, char *input) {
 //     return 1;
 // }
 
+// int external_command(char **args) {
+//     int background = 0;
+//     int len = 0;
+    
+//     // Determine the length of args
+//     while (args[len] != NULL) {
+//         len++;
+//     }
+    
+//     // Check if the last argument is "&"
+//     if (len > 0 && strcmp(args[len - 1], "&") == 0) {
+//         args[len - 1] = NULL;  // Remove '&' from arguments
+//         background = 1;
+//     }
+    
+//     // Handle "cd" command
+//     if (!strcmp(args[0], "cd")) {
+//         if (args[1] == NULL) {
+//             print_no_directory("");
+//             return 1;
+//         }
+//         if (chdir(args[1]) == -1) {
+//             print_no_directory(args[1]);
+//             return 1;
+//         }
+//         return 0;
+//     }
+    
+//     if (args[0] == NULL) {
+//         return 1;
+//     }
+    
+//     fflush(stdin);
+//     fflush(stdout);  // Flush output before forking
+//     pid_t pid = fork();
+    
+//     if (pid == 0) {
+//         // Child process        
+//         print_command_executed(getpid());
+//         execvp(args[0], args);
+//         print_exec_failed(args[0]);
+//         exit(1);
+//     } else if (pid < 0) {
+//         // Fork failed
+//         print_fork_failed();
+//         exit(1);
+//     } else {
+//         // Parent process
+        
+//         if (background) {
+//             // Handle background process
+//             printf("in background process\n");
+//             printf("args[0]: %s\n", args[0]);
+//             printf("args: &\n");  // Since '&' has been removed
+//             add_process(args[0], pid);  // Add the process to the list
+//             return 0;
+//         } else {
+//             // Handle foreground process
+//             int status;
+//             if (waitpid(pid, &status, 0) == -1) {
+//                 print_wait_failed();
+//                 exit(1);
+//             }
+    
+//             if (WIFEXITED(status)) {
+//                 return WEXITSTATUS(status);
+//             } else {
+//                 return 1;
+//             }
+//         }
+//     }
+    
+//     return 1;
+// }
+
 int external_command(char **args) {
     int background = 0;
     int len = 0;
@@ -390,17 +465,54 @@ int external_command(char **args) {
         background = 1;
     }
     
-    // Handle "cd" command
-    if (!strcmp(args[0], "cd")) {
-        if (args[1] == NULL) {
-            print_no_directory("");
-            return 1;
+    // Redirection handling
+    int fd; // File descriptor
+    int redirect_output = 0, redirect_append = 0, redirect_input = 0;
+    char *filename = NULL;
+
+    // Check for output redirection ">"
+    for (int i = 0; i < len; i++) {
+        if (args[i] != NULL && strcmp(args[i], ">") == 0) {
+            if (args[i + 1] != NULL) {
+                filename = args[i + 1];
+                redirect_output = 1;
+                args[i] = NULL;  // Truncate the command here
+                break;
+            } else {
+                print_redirection_file_error(); // Handle the case where there's no filename
+                return 1;
+            }
         }
-        if (chdir(args[1]) == -1) {
-            print_no_directory(args[1]);
-            return 1;
+    }
+
+    // Check for append redirection ">>"
+    for (int i = 0; i < len; i++) {
+        if (args[i] != NULL && strcmp(args[i], ">>") == 0) {
+            if (args[i + 1] != NULL) {
+                filename = args[i + 1];
+                redirect_append = 1;
+                args[i] = NULL;  // Truncate the command here
+                break;
+            } else {
+                print_redirection_file_error(); // Handle the case where there's no filename
+                return 1;
+            }
         }
-        return 0;
+    }
+
+    // Check for input redirection "<"
+    for (int i = 0; i < len; i++) {
+        if (args[i] != NULL && strcmp(args[i], "<") == 0) {
+            if (args[i + 1] != NULL) {
+                filename = args[i + 1];
+                redirect_input = 1;
+                args[i] = NULL;  // Truncate the command here
+                break;
+            } else {
+                print_redirection_file_error(); // Handle the case where there's no filename
+                return 1;
+            }
+        }
     }
     
     if (args[0] == NULL) {
@@ -411,9 +523,54 @@ int external_command(char **args) {
     fflush(stdout);  // Flush output before forking
     pid_t pid = fork();
     
-    if (pid == 0) {
-        // Child process        
-        print_command_executed(getpid());
+    if (pid == 0) { // Child process
+        // Handle output redirection
+        if (redirect_output) {
+            fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd < 0) {
+                print_redirection_file_error();
+                exit(1);
+            }
+            if (dup2(fd, STDOUT_FILENO) < 0) {  // Redirect stdout to the file
+                print_redirection_file_error();
+                close(fd);
+                exit(1);
+            }
+            close(fd);
+        }
+        
+        // Handle append redirection
+        if (redirect_append) {
+            fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
+            if (fd < 0) {
+                print_redirection_file_error();
+                exit(1);
+            }
+            if (dup2(fd, STDOUT_FILENO) < 0) {  // Redirect stdout to the file
+                print_redirection_file_error();
+                close(fd);
+                exit(1);
+            }
+            close(fd);
+        }
+        
+        // Handle input redirection
+        if (redirect_input) {
+            fd = open(filename, O_RDONLY);
+            if (fd < 0) {
+                print_redirection_file_error();
+                exit(1);
+            }
+            if (dup2(fd, STDIN_FILENO) < 0) {  // Redirect stdin to the file
+                print_redirection_file_error();
+                close(fd);
+                exit(1);
+            }
+            close(fd);
+        }
+        
+        // Execute the command
+        print_command_executed(getpid());  // Ensure this is formatted correctly
         execvp(args[0], args);
         print_exec_failed(args[0]);
         exit(1);
@@ -423,12 +580,7 @@ int external_command(char **args) {
         exit(1);
     } else {
         // Parent process
-        
         if (background) {
-            // Handle background process
-            printf("in background process\n");
-            printf("args[0]: %s\n", args[0]);
-            printf("args: &\n");  // Since '&' has been removed
             add_process(args[0], pid);  // Add the process to the list
             return 0;
         } else {
