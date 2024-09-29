@@ -30,6 +30,7 @@ typedef struct process {
     pid_t pid;
 } process;
 
+
 // Global variables for history and processes
 static vector *history;
 static vector *process_list;  // Vector to store active processes
@@ -53,18 +54,69 @@ void add_process(char *command, pid_t pid);
 void remove_process(pid_t pid);
 int external_command(char **args);
 void wait_background_process();
+void shell_ps();
+int get_process_info(const char *proc_path, process_info *pinfo);
+void handle_signal_command(char **args);
+
+// void wait_background_process() {
+//     int status;
+//     pid_t pid;
+
+//     // Reap all finished child processes
+//     // while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+//     //     print_killed_process(pid, "Background process finished");  // Use appropriate print function
+//     //     remove_process(pid);  // Clean up finished processes
+//     // }
+//     int length = vector_size(process_list);
+//     for (int i = 0; i < length; i++) {
+//         process *prcss = (process *) vector_get(process_list, i);
+//         pid = waitpid(prcss->pid, &status, WNOHANG);
+//         if (pid > 0) {
+//             print_killed_process(pid, "Background process finished");
+//             remove_process(pid);
+//         }
+//     }
+//     // int status;
+//     // pid_t pid;
+
+//     // while ((pid = waitpid(-1, &status, WNOHANG)) > 0)
+//     // {
+//     //     // Remove the process from process_list
+//     //     remove_process(pid);
+
+//     //     // Print a message indicating that the background process has completed
+//     //     printf("Background process %d finished\n", pid);
+//     //     fflush(stdout);
+//     // }
+// }
+
+#include <time.h>
+#include <sys/sysinfo.h>
+#include <sys/stat.h>
 
 void wait_background_process() {
     int status;
     pid_t pid;
 
-    // Reap all finished child processes
-    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-        printf("Background process finished, pid: %d\n", pid);
-        remove_process(pid);  // Clean up finished processes
+    // Iterate over all processes in the process list
+    for (size_t i = 0; i < vector_size(process_list); i++) {
+        process *prcss = (process *)vector_get(process_list, i);
+        
+        // Check if the background process has finished
+        pid = waitpid(prcss->pid, &status, WNOHANG);
+        
+        if (pid > 0) {
+            // Print a message indicating that the background process has completed
+            print_killed_process(pid, prcss->command);  // Make sure this uses the command from process struct
+            
+            // Remove the process from the list
+            remove_process(pid);
+            i--;  // Adjust index due to removal
+        }
     }
-    return;
 }
+
+
 
 
 // Signal handler for SIGINT (Ctrl+C)
@@ -185,6 +237,12 @@ void shell_loop() {
             continue;  // Ignore empty commands
         }
 
+        // Handle built-in commands kill, stop, or cont
+        if (strcmp(args[0], "kill") == 0 || strcmp(args[0], "stop") == 0 || strcmp(args[0], "cont") == 0) {
+            handle_signal_command(args);
+        }
+
+
         // Handle built-in commands
         if (strcmp(args[0], "cd") == 0) {
             add_to_history(buffer);
@@ -281,7 +339,110 @@ void execute_command(char **args, char *input) {
     // printf("input: %s\n", input+2);
     // printf("fail to execute logical\n");
     //add_to_history(input);  
-    external_command(args);
+    // Implement the 'ps' command
+    if (strcmp(args[0], "ps") == 0) {
+        print_process_info_header();
+        process_info pinfo;  // Declare a process_info struct
+        for (size_t i = 0; i < vector_size(process_list); i++) {
+            process *proc = (process *)vector_get(process_list, i);
+            char proc_path[BUFFER_SIZE];
+            snprintf(proc_path, sizeof(proc_path), "/proc/%d", proc->pid);
+
+            if (get_process_info(proc_path, &pinfo)) {
+                // Copy the command into pinfo's command field
+                strncpy(pinfo.command, proc->command, sizeof(pinfo.command) - 1);
+                pinfo.command[sizeof(pinfo.command) - 1] = '\0';
+                print_process_info(&pinfo);
+            }
+        }
+        return;
+    }
+
+    // Implement the signal commands: kill, stop, cont
+    if (strcmp(args[0], "kill") == 0) {
+        if (args[1] == NULL) {
+            print_invalid_command("kill");
+            return;
+        }
+        int target_pid = atoi(args[1]);
+        if (kill(target_pid, SIGKILL) == 0) {
+            print_killed_process(target_pid, "Killed");
+        } else {
+            print_no_process_found(target_pid);
+        }
+        return;
+    }
+
+    if (strcmp(args[0], "stop") == 0) {
+        if (args[1] == NULL) {
+            print_invalid_command("stop");
+            return;
+        }
+        int target_pid = atoi(args[1]);
+        if (kill(target_pid, SIGSTOP) == 0) {
+            print_stopped_process(target_pid, "Stopped");
+        } else {
+            print_no_process_found(target_pid);
+        }
+        return;
+    }
+
+    if (strcmp(args[0], "cont") == 0) {
+        if (args[1] == NULL) {
+            print_invalid_command("cont");
+            return;
+        }
+        int target_pid = atoi(args[1]);
+        if (kill(target_pid, SIGCONT) == 0) {
+            print_continued_process(target_pid, "Continued");
+        } else {
+            print_no_process_found(target_pid);
+        }
+        return;
+    }
+
+    // Check for redirection operators
+    int fd;
+    if (strstr(input, ">>") != NULL) {
+        char *filename = strstr(input, ">>") + 2;
+        while (*filename == ' ') filename++; // Skip spaces
+        fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
+        if (fd < 0) {
+            print_redirection_file_error();
+            return;
+        }
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
+        input[strstr(input, ">>") - input] = '\0'; // Remove redirection part from input
+    } else if (strstr(input, ">") != NULL) {
+        char *filename = strstr(input, ">") + 1;
+        while (*filename == ' ') filename++; // Skip spaces
+        fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd < 0) {
+            print_redirection_file_error();
+            return;
+        }
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
+        input[strstr(input, ">") - input] = '\0'; // Remove redirection part from input
+    } else if (strstr(input, "<") != NULL) {
+        char *filename = strstr(input, "<") + 1;
+        while (*filename == ' ') filename++; // Skip spaces
+        fd = open(filename, O_RDONLY);
+        if (fd < 0) {
+            print_redirection_file_error();
+            return;
+        }
+        dup2(fd, STDIN_FILENO);
+        close(fd);
+        input[strstr(input, "<") - input] = '\0'; // Remove redirection part from input
+    }
+
+    // Parse the cleaned-up command again to execute
+    char **new_args = parse_input(input);
+    external_command(new_args); // Execute the command
+    free(new_args);
+    // external_command(args);
 }
 
 // int external_command(char **args) {
@@ -374,52 +535,177 @@ void execute_command(char **args, char *input) {
 //     return 1;
 // }
 
+// int external_command(char **args) {
+//     int background = 0;
+//     int len = 0;
+    
+//     // Determine the length of args
+//     while (args[len] != NULL) {
+//         len++;
+//     }
+    
+//     // Check if the last argument is "&"
+//     if (len > 0 && strcmp(args[len - 1], "&") == 0) {
+//         args[len - 1] = NULL;  // Remove '&' from arguments
+//         background = 1;
+//     }
+    
+//     // Handle "cd" command
+//     if (!strcmp(args[0], "cd")) {
+//         if (args[1] == NULL) {
+//             print_no_directory("");
+//             return 1;
+//         }
+//         if (chdir(args[1]) == -1) {
+//             print_no_directory(args[1]);
+//             return 1;
+//         }
+//         return 0;
+//     }
+    
+//     if (args[0] == NULL) {
+//         return 1;
+//     }
+    
+//     fflush(stdout);  // Flush output before forking
+//     pid_t pid = fork();
+    
+//     if (pid == 0) {
+//         // Child process
+        
+//         if (background) {
+//             // Set a new process group for background processes
+//             if (setpgid(0, 0) < 0) {
+//                 perror("setpgid failed");
+//                 exit(1);
+//             }
+//         }
+        
+//         print_command_executed(getpid());
+//         execvp(args[0], args);
+//         print_exec_failed(args[0]);
+//         exit(1);
+//     } else if (pid < 0) {
+//         // Fork failed
+//         print_fork_failed();
+//         exit(1);
+//     } else {
+//         // Parent process
+        
+//         if (background) {
+//             // Handle background process
+//             printf("in background process\n");
+//             printf("args[0]: %s\n", args[0]);
+//             printf("args: &\n");  // Since '&' has been removed
+//             add_process(args[0], pid);  // Add the process to the list
+//             return 0;
+//         } else {
+//             // Handle foreground process
+//             int status;
+//             if (waitpid(pid, &status, 0) == -1) {
+//                 print_wait_failed();
+//                 exit(1);
+//             }
+    
+//             if (WIFEXITED(status)) {
+//                 return WEXITSTATUS(status);
+//             } else {
+//                 return 1;
+//             }
+//         }
+//     }
+    
+//     return 1;
+// }
+
+// int external_command(char **args) {
+//     int background = 0;
+//     int len = 0;
+//     while (args[len] != NULL) {
+//         len++;
+//     }
+//     if (*args[len - 1] == '&') {
+//         args[len - 1] = NULL;  // Remove '&' from the command
+//         background = 1;
+//     }
+
+//     if (args[0] == NULL) {
+//         return 1;
+//     }
+
+//     fflush(stdout);
+//     pid_t pid = fork();
+//     if (pid == 0) {
+//         // In child process
+//         // if (background) {
+//         //     if (setpgid(0, 0) < 0) {
+//         //         print_setpgid_failed();
+//         //         exit(1);
+//         //     }
+//         // }
+
+//         print_command_executed(getpid());  // Use provided print function
+//         execvp(args[0], args);
+//         print_exec_failed(args[0]);
+//         exit(1);
+//     } else if (pid < 0) {
+//         print_fork_failed();
+//         exit(1);
+//     } else {
+//         // In parent process
+//         if (background) {
+//             add_process(args[0], pid);  // Add the process to the list
+//             return 0;
+//         } else {
+//             // Wait for the foreground process to complete
+//             int status;
+//             if (waitpid(pid, &status, 0) == -1) {
+//                 print_wait_failed();
+//                 exit(1);
+//             }
+
+//             if (WIFEXITED(status)) {
+//                 return WEXITSTATUS(status);
+//             } else {
+//                 return 1;
+//             }
+//         }
+//     }
+//     return 1;
+// }
+
 int external_command(char **args) {
     int background = 0;
     int len = 0;
-    
+
     // Determine the length of args
     while (args[len] != NULL) {
         len++;
     }
-    
+
     // Check if the last argument is "&"
     if (len > 0 && strcmp(args[len - 1], "&") == 0) {
         args[len - 1] = NULL;  // Remove '&' from arguments
         background = 1;
     }
-    
-    // Handle "cd" command
-    if (!strcmp(args[0], "cd")) {
-        if (args[1] == NULL) {
-            print_no_directory("");
-            return 1;
-        }
-        if (chdir(args[1]) == -1) {
-            print_no_directory(args[1]);
-            return 1;
-        }
-        return 0;
-    }
-    
+
     if (args[0] == NULL) {
         return 1;
     }
-    
-    fflush(stdout);  // Flush output before forking
+
+    fflush(stdout);
     pid_t pid = fork();
-    
+
     if (pid == 0) {
         // Child process
-        
         if (background) {
             // Set a new process group for background processes
             if (setpgid(0, 0) < 0) {
-                perror("setpgid failed");
+                print_setpgid_failed();
                 exit(1);
             }
         }
-        
+
         print_command_executed(getpid());
         execvp(args[0], args);
         print_exec_failed(args[0]);
@@ -430,22 +716,18 @@ int external_command(char **args) {
         exit(1);
     } else {
         // Parent process
-        
         if (background) {
-            // Handle background process
-            printf("in background process\n");
-            printf("args[0]: %s\n", args[0]);
-            printf("args: &\n");  // Since '&' has been removed
             add_process(args[0], pid);  // Add the process to the list
+            printf("in background process\n"); // Debug: Make sure background process message is shown
             return 0;
         } else {
-            // Handle foreground process
+            // Wait for the foreground process to complete
             int status;
             if (waitpid(pid, &status, 0) == -1) {
                 print_wait_failed();
                 exit(1);
             }
-    
+
             if (WIFEXITED(status)) {
                 return WEXITSTATUS(status);
             } else {
@@ -453,9 +735,10 @@ int external_command(char **args) {
             }
         }
     }
-    
     return 1;
 }
+
+
 
 
 
@@ -760,3 +1043,108 @@ void handle_logical_operators(char **args) {
     // execute_command(args);
     external_command(args);
 }
+
+void shell_ps() {
+    print_process_info_header();
+
+    // Include the shell process itself
+    process_info pinfo;
+    char proc_path[BUFFER_SIZE];
+    snprintf(proc_path, sizeof(proc_path), "/proc/%d", getpid());
+    if (get_process_info(proc_path, &pinfo)) {
+        print_process_info(&pinfo);
+    }
+
+    // Now print information about all active child processes
+    for (size_t i = 0; i < vector_size(process_list); i++) {
+        process *proc = (process *)vector_get(process_list, i);
+        snprintf(proc_path, sizeof(proc_path), "/proc/%d", proc->pid);
+        if (get_process_info(proc_path, &pinfo)) {
+            pinfo.command = proc->command;
+            print_process_info(&pinfo);
+        }
+    }
+}
+
+int get_process_info(const char *proc_path, process_info *pinfo) {
+    char stat_path[BUFFER_SIZE], status_path[BUFFER_SIZE];
+    FILE *stat_file, *status_file;
+    char buffer[BUFFER_SIZE];
+    
+    // Open /proc/[pid]/stat file to read process statistics
+    snprintf(stat_path, sizeof(stat_path), "%s/stat", proc_path);
+    stat_file = fopen(stat_path, "r");
+    if (!stat_file) return 0;
+
+    // Read the relevant information from /proc/[pid]/stat
+    unsigned long utime, stime, starttime;
+    // unsigned long long start_time_ticks;
+    fscanf(stat_file, "%d %*s %c %*d %*d %*d %*d %*d %lu %lu %*lu %*lu %*lu %*lu %*lu %*lu %lu %*ld %*ld %*ld %*ld %lu",
+           &pinfo->pid, &pinfo->state, &utime, &stime, &pinfo->vsize, &starttime);
+    fclose(stat_file);
+
+    // Open /proc/[pid]/status file to read the number of threads
+    snprintf(status_path, sizeof(status_path), "%s/status", proc_path);
+    status_file = fopen(status_path, "r");
+    if (!status_file) return 0;
+    
+    while (fgets(buffer, BUFFER_SIZE, status_file)) {
+        if (strncmp(buffer, "Threads:", 8) == 0) {
+            sscanf(buffer, "Threads: %ld", &pinfo->nthreads);
+            break;
+        }
+    }
+    fclose(status_file);
+
+    // Get system uptime to calculate the start time of the process
+    struct sysinfo sys_info;
+    if (sysinfo(&sys_info) != 0) return 0;
+    time_t boot_time = time(NULL) - sys_info.uptime; // System boot time
+
+    // Calculate the process start time
+    time_t process_start_time = boot_time + (starttime / sysconf(_SC_CLK_TCK));
+    struct tm *start_tm = localtime(&process_start_time);
+    strftime(pinfo->start_str, sizeof(pinfo->start_str), "%H:%M", start_tm);
+
+    // Calculate total CPU time (utime + stime) in seconds
+    unsigned long total_time = (utime + stime) / sysconf(_SC_CLK_TCK);
+    snprintf(pinfo->time_str, sizeof(pinfo->time_str), "%lu:%02lu", total_time / 60, total_time % 60);
+
+    return 1;
+}
+
+
+void handle_signal_command(char **args) {
+    if (args[1] == NULL) {
+        if (strcmp(args[0], "kill") == 0) {
+            print_invalid_command("kill");
+        } else if (strcmp(args[0], "stop") == 0) {
+            print_invalid_command("stop");
+        } else if (strcmp(args[0], "cont") == 0) {
+            print_invalid_command("cont");
+        }
+        return;
+    }
+
+    pid_t pid = atoi(args[1]);
+    if (strcmp(args[0], "kill") == 0) {
+        if (kill(pid, SIGKILL) == 0) {
+            print_killed_process(pid, "killed");
+        } else {
+            print_no_process_found(pid);
+        }
+    } else if (strcmp(args[0], "stop") == 0) {
+        if (kill(pid, SIGSTOP) == 0) {
+            print_stopped_process(pid, "stopped");
+        } else {
+            print_no_process_found(pid);
+        }
+    } else if (strcmp(args[0], "cont") == 0) {
+        if (kill(pid, SIGCONT) == 0) {
+            print_continued_process(pid, "continued");
+        } else {
+            print_no_process_found(pid);
+        }
+    }
+}
+
