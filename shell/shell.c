@@ -82,60 +82,6 @@ void handle_ps_command() {
     destory_process_info(shell_info);
 }
 
-// process_info* create_process_info(process *proc) {
-//     process_info *info = malloc(sizeof(process_info));
-//     if (!info) {
-//         // Handle allocation failure
-//         return NULL;
-//     }
-
-//     // Initialize fields
-//     info->pid = proc->pid;
-//     info->command = strdup(proc->command); // Make a copy of the command
-
-//     // Paths to /proc files
-//     char stat_path[256];
-//     snprintf(stat_path, sizeof(stat_path), "/proc/%d/stat", proc->pid);
-
-//     FILE *stat_file = fopen(stat_path, "r");
-//     if (!stat_file) {
-//         // Process might have terminated
-//         info->nthreads = 0;
-//         info->vsize = 0;
-//         info->state = 'Z'; // Zombie or unknown
-//         info->start_str = strdup("??:??");
-//         info->time_str = strdup("??:??");
-//         return info;
-//     }
-
-//     // Read the entire stat line
-//     char stat_line[1024];
-//     if (fgets(stat_line, sizeof(stat_line), stat_file) == NULL) {
-//         fclose(stat_file);
-//         info->nthreads = 0;
-//         info->vsize = 0;
-//         info->state = 'Z'; // Zombie or unknown
-//         info->start_str = strdup("??:??");
-//         info->time_str = strdup("??:??");
-//         return info;
-//     }
-//     fclose(stat_file);
-
-//     // Parse the stat_line (similar to previous implementation)
-//     // ...
-
-//     // After parsing, set the fields appropriately
-//     info->nthreads = num_threads;
-//     info->vsize = vsize; // in kilobytes
-//     info->state = state_char;
-
-//     // Allocate and set start_str and time_str
-//     info->start_str = strdup(start_time_str);
-//     info->time_str = strdup(cpu_time_str);
-
-//     return info;
-// }
-
 process_info* create_process_info(process *proc) {
     process_info *info = malloc(sizeof(process_info));
     if (!info) {
