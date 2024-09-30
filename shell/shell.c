@@ -21,6 +21,8 @@ I use Chatgpt to help me debug the operator part and read file part.
 #include <sys/types.h>
 #include <ctype.h>
 #include <dirent.h>
+#include <errno.h>
+
 
 #define BUFFER_SIZE 1024
 #define MAX_HISTORY 1000
@@ -53,6 +55,20 @@ void add_process(char *command, pid_t pid);
 void remove_process(pid_t pid);
 int external_command(char **args);
 void wait_background_process();
+void handle_signal_commands(char **args);
+void send_signal_to_process(pid_t pid, int signal, const char *command);
+int is_child_process(pid_t pid);
+process* get_process(pid_t pid);
+
+process* get_process(pid_t pid) {
+    for (size_t i = 0; i < vector_size(process_list); i++) {
+        process *proc = (process *)vector_get(process_list, i);
+        if (proc->pid == pid) {
+            return proc; // Found the process
+        }
+    }
+    return NULL; // Not found
+}
 
 void wait_background_process() {
     int status;
@@ -65,6 +81,96 @@ void wait_background_process() {
     }
     return;
 }
+
+void handle_signal_commands(char **args) {
+    if (strcmp(args[0], "kill") == 0) {
+        // Handle kill command
+        if (args[1] == NULL) {
+            print_invalid_command("kill");
+            return;
+        }
+        pid_t pid = atoi(args[1]);
+        send_signal_to_process(pid, SIGKILL, "kill");
+    } else if (strcmp(args[0], "stop") == 0) {
+        // Handle stop command
+        if (args[1] == NULL) {
+            print_invalid_command("stop");
+            return;
+        }
+        pid_t pid = atoi(args[1]);
+        send_signal_to_process(pid, SIGSTOP, "stop");
+    } else if (strcmp(args[0], "cont") == 0) {
+        // Handle cont command
+        if (args[1] == NULL) {
+            print_invalid_command("cont");
+            return;
+        }
+        pid_t pid = atoi(args[1]);
+        send_signal_to_process(pid, SIGCONT, "cont");
+    }
+}
+
+void send_signal_to_process(pid_t pid, int signal, const char *command) {
+    // Check if pid is a child process
+    if (!is_child_process(pid)) {
+        if (strcmp(command, "kill") == 0) {
+            print_no_process_found(pid);
+        } else if (strcmp(command, "stop") == 0) {
+            print_no_process_found(pid);
+        } else if (strcmp(command, "cont") == 0) {
+            print_no_process_found(pid);
+        }
+        return;
+    }
+
+    // Send the signal
+    if (kill(pid, signal) == -1) {
+        // Handle error
+        if (errno == ESRCH) {
+            // No such process
+            if (strcmp(command, "kill") == 0) {
+                print_no_process_found(pid);
+            } else if (strcmp(command, "stop") == 0) {
+                print_no_process_found(pid);
+            } else if (strcmp(command, "cont") == 0) {
+                print_no_process_found(pid);
+            }
+        } else {
+            // Other error
+            perror("kill");
+        }
+    } else {
+        // Success
+        process *proc = get_process(pid); // You need to implement this function to retrieve the process struct
+        if (strcmp(command, "kill") == 0) {
+            if (proc != NULL) {
+                print_killed_process(pid, proc->command);
+                remove_process(pid);
+            }
+        } else if (strcmp(command, "stop") == 0) {
+            if (proc != NULL) {
+                print_stopped_process(pid, proc->command);
+                // remove_process(pid);
+            }
+        } else if (strcmp(command, "cont") == 0) {
+            if (proc != NULL) {
+                print_continued_process(pid, proc->command);
+                // remove_process(pid);
+            }
+        }
+    }
+}
+
+int is_child_process(pid_t pid) {
+    for (size_t i = 0; i < vector_size(process_list); i++) {
+        process *proc = (process *)vector_get(process_list, i);
+        if (proc->pid == pid) {
+            return 1; // Found the process
+        }
+    }
+    return 0; // Not a child process
+}
+
 
 
 // Signal handler for SIGINT (Ctrl+C)
@@ -161,7 +267,9 @@ void shell_loop() {
     signal(SIGCHLD, wait_background_process);
 
     while (1) {
-        print_prompt(getcwd(NULL, 0), getpid());  // Print shell prompt
+        char *cwd = getcwd(NULL, 0);
+        print_prompt(cwd, getpid());  // Print shell prompt
+        free(cwd);
 
         if (fgets(buffer, BUFFER_SIZE, stdin) == NULL) {
             if (feof(stdin)) {  // Handle EOF (Ctrl+D)
@@ -228,6 +336,12 @@ void execute_command(char **args, char *input) {
         return;
     }
 
+    // Check for signal commands
+    if (strcmp(args[0], "kill") == 0 || strcmp(args[0], "stop") == 0 || strcmp(args[0], "cont") == 0) {
+        handle_signal_commands(args);
+        return;
+    }
+
     // check if the command contains a logical operator
     if (strstr(input, "&&") != NULL || strstr(input, "||") != NULL || strstr(input, ";") != NULL) {
         // printf("args[0]: %s\n", args[0]);
@@ -285,170 +399,6 @@ void execute_command(char **args, char *input) {
     external_command(args);
 }
 
-// int external_command(char **args) {
-//     int background = 0;
-//     int len = 0;
-//     while (args[len] != NULL) {
-//         len++;
-//     }
-//     if (*args[len - 1] == '&') {
-//         args[len - 1] = NULL;  // Remove '&' from the command
-//         background = 1;
-//     }
-
-//     if(!strcmp(args[0], "cd")){
-//         if (args[1] == NULL) {
-//             print_no_directory("");
-//             return 1;
-//         }
-//         // printf("is not cd\n");
-//         if (chdir(args[1]) == -1) {
-//             print_no_directory(args[1]);
-//             return 1;
-//         }
-//         return 0;
-//     }
-
-//     if (args[0] == NULL) {
-//         return 1;
-//     }
-//     fflush(stdout);
-//     pid_t pid = fork();
-//     if (pid == 0) {
-//         // In child process
-//         // check if the command is a background process
-//         // printf("args[0]: %s\n", args[0]);
-//         // printf("args[1]: %s\n", args[1]);
-//         // int len = 0;
-//         // while (args[len] != NULL) {
-//         //     len++;
-//         // }
-//         // setpgid(0, 0);  // Set the process group ID in the child process
-//         // if (*args[len - 1] == '&') {
-//         //     args[len - 1] = NULL;  // Remove '&' from the command
-//         // }
-//         print_command_executed(getpid());
-//         execvp(args[0], args);
-//         print_exec_failed(args[0]);
-//         exit(1);
-//         // print_command_executed(getpid());
-//         // execvp(args[0], args);
-//         // print_exec_failed(args[0]);
-//         // // printf("exit failure\n");
-//         // exit(1);
-//     }else if (pid < 0) {
-//         print_fork_failed();
-//         exit(1);
-//     } else {
-//         // In parent process
-//         // check background process
-//         int length = 0;
-//         while (args[length] != NULL) {
-//             length++;
-//         }
-//         printf("in background process\n");
-//         printf("args[0]: %s\n", args[0]);
-//         printf("args: %s\n", args[length - 1]);
-//         if (background) {
-//             // *args[length - 1] = '\0';  // Remove '&' from the command
-//             // setpgid(0, 0);  // Set the process group ID to the process ID
-//             // printf("check background process\n");
-//             // add_process(args[0], pid);  // Add the process to the list
-//             // return 0;
-//             add_process(args[0], pid);  // Add the process to the list
-//             return 0;
-//         } else {
-//             // Wait for the child process to complete
-//             int status;
-//             if (waitpid(pid, &status, 0) == -1) {
-//                 print_wait_failed();
-//                 exit(1);
-//             }
-
-//             if (WIFEXITED(status)) {
-//                 return WEXITSTATUS(status);
-//             }else{
-//                 return 1;
-//             }
-//         }
-//     }
-//     return 1;
-// }
-
-// int external_command(char **args) {
-//     int background = 0;
-//     int len = 0;
-    
-//     // Determine the length of args
-//     while (args[len] != NULL) {
-//         len++;
-//     }
-    
-//     // Check if the last argument is "&"
-//     if (len > 0 && strcmp(args[len - 1], "&") == 0) {
-//         args[len - 1] = NULL;  // Remove '&' from arguments
-//         background = 1;
-//     }
-    
-//     // Handle "cd" command
-//     if (!strcmp(args[0], "cd")) {
-//         if (args[1] == NULL) {
-//             print_no_directory("");
-//             return 1;
-//         }
-//         if (chdir(args[1]) == -1) {
-//             print_no_directory(args[1]);
-//             return 1;
-//         }
-//         return 0;
-//     }
-    
-//     if (args[0] == NULL) {
-//         return 1;
-//     }
-    
-//     fflush(stdin);
-//     fflush(stdout);  // Flush output before forking
-//     pid_t pid = fork();
-    
-//     if (pid == 0) {
-//         // Child process        
-//         print_command_executed(getpid());
-//         execvp(args[0], args);
-//         print_exec_failed(args[0]);
-//         exit(1);
-//     } else if (pid < 0) {
-//         // Fork failed
-//         print_fork_failed();
-//         exit(1);
-//     } else {
-//         // Parent process
-        
-//         if (background) {
-//             // Handle background process
-//             printf("in background process\n");
-//             printf("args[0]: %s\n", args[0]);
-//             printf("args: &\n");  // Since '&' has been removed
-//             add_process(args[0], pid);  // Add the process to the list
-//             return 0;
-//         } else {
-//             // Handle foreground process
-//             int status;
-//             if (waitpid(pid, &status, 0) == -1) {
-//                 print_wait_failed();
-//                 exit(1);
-//             }
-    
-//             if (WIFEXITED(status)) {
-//                 return WEXITSTATUS(status);
-//             } else {
-//                 return 1;
-//             }
-//         }
-//     }
-    
-//     return 1;
-// }
 
 int external_command(char **args) {
     int background = 0;
@@ -896,6 +846,18 @@ void handle_logical_operators(char **args) {
 
 
             waitpid(-1, &status, 0);  // Wait for the first command to complete
+            
+            // free the memory of com1 com2
+            for (int j = 0; com1[j] != NULL; j++) {
+                free(com1[j]);
+            }
+            free(com1);
+
+            for (int j = 0; com2[j] != NULL; j++) {
+                free(com2[j]);
+            }
+            free(com2);
+            
             return;
         }
         i++;
