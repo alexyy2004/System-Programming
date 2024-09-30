@@ -218,12 +218,12 @@ process_info* create_process_info(process *proc) {
     }
 
     // Extract necessary fields
-    char state_char = stat_fields[0][0];
-    unsigned long utime = strtoul(stat_fields[13], NULL, 10);
-    unsigned long stime = strtoul(stat_fields[14], NULL, 10);
-    int num_threads = atoi(stat_fields[17]);
-    unsigned long long starttime = strtoull(stat_fields[19], NULL, 10);
-    unsigned long vsize = strtoul(stat_fields[21], NULL, 10) / 1024; // Convert to kilobytes
+    char state_char = stat_fields[0][0]; // Field 3 (state)
+    unsigned long utime = strtoul(stat_fields[11], NULL, 10); // Field 14 (utime)
+    unsigned long stime = strtoul(stat_fields[12], NULL, 10); // Field 15 (stime)
+    int num_threads = atoi(stat_fields[17]); // Field 20 (num_threads)
+    unsigned long long starttime = strtoull(stat_fields[19], NULL, 10); // Field 22 (starttime)
+    unsigned long vsize = strtoul(stat_fields[20], NULL, 10) / 1024; // Field 23 (vsize)
 
     // Read btime from /proc/stat
     FILE *proc_stat_file = fopen("/proc/stat", "r");
@@ -775,10 +775,21 @@ int external_command(char **args, char *input) {
     } else {
         // Parent process
         if (background) {
+            int background_setpgid = setpgid(pid, pid);
+            if (background_setpgid == -1) {
+                print_setpgid_failed();
+                exit(1);
+            }
             add_process(input, pid);  // Add the process to the list
             return 0;
         } else {
             // Handle foreground process
+            int foreground_setpgid = setpgid(pid, getpid());
+            if (foreground_setpgid == -1) {
+                print_setpgid_failed();
+                exit(1);
+            }
+
             int status;
             if (waitpid(pid, &status, 0) == -1) {
                 print_wait_failed();
