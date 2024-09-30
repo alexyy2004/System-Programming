@@ -59,6 +59,242 @@ void handle_signal_commands(char **args);
 void send_signal_to_process(pid_t pid, int signal, const char *command);
 int is_child_process(pid_t pid);
 process* get_process(pid_t pid);
+void handle_ps_command();
+process_info* create_process_info(process *proc); //todo
+void destory_process_info(process_info* info); //todo
+
+void handle_ps_command() {
+    print_process_info_header();
+    size_t proc_length = vector_size(process_list);
+    for (size_t i = 0; i < proc_length; i++) {
+        process *proc = (process *)vector_get(process_list, i);
+        process_info *info = create_process_info(proc);
+        print_process_info(info);
+        destory_process_info(info);
+    }
+    // create a new process shell
+    process *shell = malloc(sizeof(process));
+    shell->command = "./shell";
+    shell->pid = getpid();
+    process_info *shell_info = create_process_info(shell);
+    print_process_info(shell_info);
+    destory_process_info(shell_info);
+}
+
+// process_info* create_process_info(process *proc) {
+//     process_info *info = malloc(sizeof(process_info));
+//     if (!info) {
+//         // Handle allocation failure
+//         return NULL;
+//     }
+
+//     // Initialize fields
+//     info->pid = proc->pid;
+//     info->command = strdup(proc->command); // Make a copy of the command
+
+//     // Paths to /proc files
+//     char stat_path[256];
+//     snprintf(stat_path, sizeof(stat_path), "/proc/%d/stat", proc->pid);
+
+//     FILE *stat_file = fopen(stat_path, "r");
+//     if (!stat_file) {
+//         // Process might have terminated
+//         info->nthreads = 0;
+//         info->vsize = 0;
+//         info->state = 'Z'; // Zombie or unknown
+//         info->start_str = strdup("??:??");
+//         info->time_str = strdup("??:??");
+//         return info;
+//     }
+
+//     // Read the entire stat line
+//     char stat_line[1024];
+//     if (fgets(stat_line, sizeof(stat_line), stat_file) == NULL) {
+//         fclose(stat_file);
+//         info->nthreads = 0;
+//         info->vsize = 0;
+//         info->state = 'Z'; // Zombie or unknown
+//         info->start_str = strdup("??:??");
+//         info->time_str = strdup("??:??");
+//         return info;
+//     }
+//     fclose(stat_file);
+
+//     // Parse the stat_line (similar to previous implementation)
+//     // ...
+
+//     // After parsing, set the fields appropriately
+//     info->nthreads = num_threads;
+//     info->vsize = vsize; // in kilobytes
+//     info->state = state_char;
+
+//     // Allocate and set start_str and time_str
+//     info->start_str = strdup(start_time_str);
+//     info->time_str = strdup(cpu_time_str);
+
+//     return info;
+// }
+
+process_info* create_process_info(process *proc) {
+    process_info *info = malloc(sizeof(process_info));
+    if (!info) {
+        // Handle allocation failure
+        return NULL;
+    }
+
+    info->pid = proc->pid;
+    info->command = strdup(proc->command); // Make a copy of the command
+
+    // Paths to /proc files
+    char stat_path[256];
+    snprintf(stat_path, sizeof(stat_path), "/proc/%d/stat", proc->pid);
+
+    FILE *stat_file = fopen(stat_path, "r");
+    if (!stat_file) {
+        // Process might have terminated or permission denied
+        info->nthreads = 0;
+        info->vsize = 0;
+        info->state = 'Z'; // Zombie or unknown
+        info->start_str = strdup("??:??");
+        info->time_str = strdup("??:??");
+        return info;
+    }
+
+    // Read the entire stat line
+    char stat_line[1024];
+    if (fgets(stat_line, sizeof(stat_line), stat_file) == NULL) {
+        fclose(stat_file);
+        info->nthreads = 0;
+        info->vsize = 0;
+        info->state = 'Z'; // Zombie or unknown
+        info->start_str = strdup("??:??");
+        info->time_str = strdup("??:??");
+        return info;
+    }
+    fclose(stat_file);
+
+    // Parse the stat_line
+    // The comm field might contain spaces and is enclosed in parentheses.
+    // We need to find the closing parenthesis.
+    char *close_paren = strrchr(stat_line, ')');
+    if (!close_paren) {
+        // Malformed stat file
+        info->nthreads = 0;
+        info->vsize = 0;
+        info->state = 'Z';
+        info->start_str = strdup("??:??");
+        info->time_str = strdup("??:??");
+        return info;
+    }
+
+    // Extract pid and comm
+    int stat_pid;
+    char comm[256];
+    sscanf(stat_line, "%d (%[^)])", &stat_pid, comm);
+
+    // Get the rest of the fields
+    char *rest = close_paren + 2; // Skip ") "
+
+    // Split rest into tokens
+    #define MAX_STAT_FIELDS 64
+    char *stat_fields[MAX_STAT_FIELDS];
+    int field_count = 0;
+
+    char *field = strtok(rest, " ");
+    while (field != NULL && field_count < MAX_STAT_FIELDS) {
+        stat_fields[field_count++] = field;
+        field = strtok(NULL, " ");
+    }
+
+    if (field_count < 22) {
+        // Not enough fields
+        info->nthreads = 0;
+        info->vsize = 0;
+        info->state = 'Z';
+        info->start_str = strdup("??:??");
+        info->time_str = strdup("??:??");
+        return info;
+    }
+
+    // Extract necessary fields
+    char state_char = stat_fields[0][0];
+    unsigned long utime = strtoul(stat_fields[13], NULL, 10);
+    unsigned long stime = strtoul(stat_fields[14], NULL, 10);
+    int num_threads = atoi(stat_fields[17]);
+    unsigned long long starttime = strtoull(stat_fields[19], NULL, 10);
+    unsigned long vsize = strtoul(stat_fields[21], NULL, 10) / 1024; // Convert to kilobytes
+
+    // Read btime from /proc/stat
+    FILE *proc_stat_file = fopen("/proc/stat", "r");
+    if (!proc_stat_file) {
+        // Cannot read /proc/stat
+        info->nthreads = num_threads;
+        info->vsize = vsize;
+        info->state = state_char;
+        info->start_str = strdup("??:??");
+        info->time_str = strdup("??:??");
+        return info;
+    }
+
+    char proc_stat_line[256];
+    unsigned long btime = 0;
+    while (fgets(proc_stat_line, sizeof(proc_stat_line), proc_stat_file)) {
+        if (strncmp(proc_stat_line, "btime ", 6) == 0) {
+            btime = strtoul(proc_stat_line + 6, NULL, 10);
+            break;
+        }
+    }
+    fclose(proc_stat_file);
+
+    if (btime == 0) {
+        // Could not find btime
+        info->nthreads = num_threads;
+        info->vsize = vsize;
+        info->state = state_char;
+        info->start_str = strdup("??:??");
+        info->time_str = strdup("??:??");
+        return info;
+    }
+
+    // Calculate the process start time
+    unsigned long hertz = sysconf(_SC_CLK_TCK);
+    unsigned long long total_start_time = btime + (starttime / hertz);
+    time_t proc_start_time = (time_t)total_start_time;
+    struct tm *start_tm = localtime(&proc_start_time);
+    if (!start_tm) {
+        info->start_str = strdup("??:??");
+    } else {
+        char start_time_str[16];
+        snprintf(start_time_str, sizeof(start_time_str), "%02d:%02d",
+                 start_tm->tm_hour, start_tm->tm_min);
+        info->start_str = strdup(start_time_str);
+    }
+
+    // Calculate CPU time
+    unsigned long total_time_in_sec = (utime + stime) / hertz;
+    unsigned long minutes = total_time_in_sec / 60;
+    unsigned long seconds = total_time_in_sec % 60;
+    char cpu_time_str[16];
+    snprintf(cpu_time_str, sizeof(cpu_time_str), "%lu:%02lu", minutes, seconds);
+    info->time_str = strdup(cpu_time_str);
+
+    // Set remaining fields
+    info->nthreads = num_threads;
+    info->vsize = vsize;
+    info->state = state_char;
+
+    return info;
+}
+
+
+void destory_process_info(process_info* info) {
+    if (info) {
+        free(info->start_str);
+        free(info->time_str);
+        free(info->command);
+        free(info);
+    }
+}
 
 process* get_process(pid_t pid) {
     for (size_t i = 0; i < vector_size(process_list); i++) {
@@ -339,6 +575,12 @@ void execute_command(char **args, char *input) {
     // Check for signal commands
     if (strcmp(args[0], "kill") == 0 || strcmp(args[0], "stop") == 0 || strcmp(args[0], "cont") == 0) {
         handle_signal_commands(args);
+        return;
+    }
+    
+    // Check for ps command
+    if (strcmp(args[0], "ps") == 0) {
+        handle_ps_command();
         return;
     }
 
