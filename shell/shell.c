@@ -42,7 +42,7 @@ static char *history_path = NULL;
 void shell_loop();
 void execute_command(char **args, char *input);
 int shell_cd(char **args);
-void handle_logical_operators(char **args);
+void handle_logical_operators(char **args, char *input);
 void add_to_history(const char *command);
 char **parse_input(char *input);
 void handle_signals();
@@ -53,7 +53,7 @@ void run_history_cmd(size_t index);
 void run_prefix_cmd(const char *prefix);
 void add_process(char *command, pid_t pid);
 void remove_process(pid_t pid);
-int external_command(char **args);
+int external_command(char **args, char *input);
 void wait_background_process();
 void handle_signal_commands(char **args);
 void send_signal_to_process(pid_t pid, int signal, const char *command);
@@ -66,6 +66,7 @@ void destory_process_info(process_info* info); //todo
 void handle_ps_command() {
     print_process_info_header();
     size_t proc_length = vector_size(process_list);
+    printf("proc_length: %ld\n", proc_length);
     for (size_t i = 0; i < proc_length; i++) {
         process *proc = (process *)vector_get(process_list, i);
         process_info *info = create_process_info(proc);
@@ -514,6 +515,7 @@ void shell_loop() {
             continue;
         }
 
+        buffer[strcspn(buffer, "\n")] = '\0';  // Remove trailing newline
         input = strdup(buffer);  // Duplicate buffer to preserve input
         
         if (input == NULL || strcmp(input, "\n") == 0) {
@@ -591,7 +593,7 @@ void execute_command(char **args, char *input) {
         // printf("args[2]: %s\n", args[2]);
         // printf("input: %s\n", input);
         // printf("success to execute logical\n");
-        handle_logical_operators(args);
+        handle_logical_operators(args, input);
         return;
     }
 
@@ -638,11 +640,11 @@ void execute_command(char **args, char *input) {
     // printf("input: %s\n", input+2);
     // printf("fail to execute logical\n");
     //add_to_history(input);  
-    external_command(args);
+    external_command(args, input);
 }
 
 
-int external_command(char **args) {
+int external_command(char **args, char *input) {
     int background = 0;
     int len = 0;
     
@@ -773,7 +775,7 @@ int external_command(char **args) {
     } else {
         // Parent process
         if (background) {
-            add_process(args[0], pid);  // Add the process to the list
+            add_process(input, pid);  // Add the process to the list
             return 0;
         } else {
             // Handle foreground process
@@ -955,7 +957,7 @@ char **parse_input(char *input) {
 }
 
 // Handle logical operators
-void handle_logical_operators(char **args) {
+void handle_logical_operators(char **args, char *input) {
     int temp = 0;
     while (args[temp] != NULL) {
         temp++;
@@ -1000,11 +1002,11 @@ void handle_logical_operators(char **args) {
             //     printf("com2[%d]: %s\n", j, com2[j]);
             // }
             //printf("*");
-            int a = external_command(com1);
+            int a = external_command(com1, input);
             // printf("a: %d\n", a);
             if(!a) {
                 // printf("*");
-                external_command(com2);
+                external_command(com2, input);
             }
 
 
@@ -1041,11 +1043,11 @@ void handle_logical_operators(char **args) {
             //     printf("com2[%d]: %s\n", j, com2[j]);
             // }
             //printf("*");
-            int a = external_command(com1);
+            int a = external_command(com1, input);
             // printf("a: %d\n", a);
             if(a) {
                 // printf("*");
-                external_command(com2);
+                external_command(com2, input);
             }
 
 
@@ -1082,9 +1084,9 @@ void handle_logical_operators(char **args) {
             //     printf("com2[%d]: %s\n", j, com2[j]);
             // }
             //printf("*");
-            external_command(com1);
+            external_command(com1, input);
             // printf("*");
-            external_command(com2);
+            external_command(com2, input);
 
 
             waitpid(-1, &status, 0);  // Wait for the first command to complete
@@ -1107,5 +1109,5 @@ void handle_logical_operators(char **args) {
 
     // If no logical operator, execute the command normally
     // execute_command(args);
-    external_command(args);
+    external_command(args, input);
 }
