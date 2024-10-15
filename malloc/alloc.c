@@ -35,34 +35,34 @@ size_t align8(size_t size) {
     return size;
 }
 
-// int splitBlock(size_t size, block_meta_t *entry) {
-//   if (entry->size >= 2*size && (entry->size-size) >= 1024) {
-//     // printf("split block\n");
-//     block_meta_t *new_entry = entry->ptr + size;
-//     new_entry->ptr = (new_entry + 1);
-//     // printf("splitBlock segfault end\n");
-//     new_entry->free = 1;
-//     new_entry->size = entry->size - size - sizeof(block_meta_t);
-//     new_entry->next = entry;
-//     if (entry->prev) {
-//       entry->prev->next = new_entry;
-//     } else {
-//       global_head = new_entry;
-//     }
-//     new_entry->prev = entry->prev;
-//     entry->size = size;
-//     entry->prev = new_entry;
-//     // printf("entry->size: %zu\n", entry->size);
-//     // printf("new_entry->size: %zu\n", new_entry->size);
-//     // block_meta_t *temp = head;
-//     // while(temp){
-//     //   printf("block->size: %zu, %d\n", temp->size, temp->free);
-//     //   temp = temp->next;
-//     // }
-//     return 1;
-//   }
-//   return 0;
-// }
+int splitBlock(size_t size, block_meta_t *entry) {
+  if (entry->size >= 2*size && (entry->size-size) >= 1024) {
+    // printf("split block\n");
+    block_meta_t *new_entry = entry->ptr + size;
+    new_entry->ptr = (new_entry + 1);
+    // printf("splitBlock segfault end\n");
+    new_entry->free = 1;
+    new_entry->size = entry->size - size - sizeof(block_meta_t);
+    new_entry->next = entry;
+    if (entry->prev) {
+      entry->prev->next = new_entry;
+    } else {
+      global_head = new_entry;
+    }
+    new_entry->prev = entry->prev;
+    entry->size = size;
+    entry->prev = new_entry;
+    // printf("entry->size: %zu\n", entry->size);
+    // printf("new_entry->size: %zu\n", new_entry->size);
+    // block_meta_t *temp = head;
+    // while(temp){
+    //   printf("block->size: %zu, %d\n", temp->size, temp->free);
+    //   temp = temp->next;
+    // }
+    return 1;
+  }
+  return 0;
+}
 
 /**
  * Checks for addition overflow in size calculations.
@@ -83,7 +83,17 @@ int check_mul_overflow(size_t a, size_t b) {
  * Finds a free block with enough space.
  */
 block_meta_t *find_free_block(size_t size) {
+    // printf("entered find_free_block\n");
     block_meta_t *current = global_head;
+    // printf("global_head: %p\n", (void *)global_head);
+
+    // block_meta_t *temp = global_head;
+    // while (temp) {
+    //     printf("Block at %p: size=%zu, free=%d, next=%p, prev=%p\n",
+    //         (void *)temp, temp->size, temp->free, (void *)temp->next, (void *)temp->prev);
+    //     temp = temp->next;
+    // }
+
     while (current) {
         if (current->free && current->size >= size) {
             return current;
@@ -126,9 +136,15 @@ block_meta_t *find_free_block(size_t size) {
  * Splits a block into two if it's larger than needed.
  */
 block_meta_t* split_block(block_meta_t *block, size_t size) {
+    // if (block != NULL) {
+    //     printf("block original size: %zu\n", block->size);
+    // } else {
+    //     printf("block is NULL\n");
+    // }
+    
     if (block->size >= 2 * size) {
         block_meta_t *new_block = (block_meta_t *)((char*)block->ptr + size);
-        new_block->ptr = new_block + 1;
+        new_block->ptr = (void *)(new_block + 1);
         new_block->size = block->size - size - META_SIZE;
         // new_block->next = block->next;
         // new_block->prev = block;
@@ -211,51 +227,104 @@ void coalesce(block_meta_t *block) {
  *
  * @see http://www.cplusplus.com/reference/clibrary/cstdlib/malloc/
  */
+// void *malloc(size_t size) {
+//     block_meta_t *block = NULL;
+
+//     if (size <= 0) {
+//         return NULL;
+//     }
+
+//     if (total_memory_sbrk - total_memory_requested >= size) {
+//         block = find_free_block(size);
+//     }
+//     // block = find_free_block(size);
+//     if (block) {
+//         block = split_block(block, size);
+//         // printf("block size: %zu\n", block->size);
+//         total_memory_requested += size;
+//         block->free = 0;
+//     } else {
+//         if (global_head && global_head->free) {
+//             if (sbrk(size - global_head->size) == (void *) - 1) {
+//                 return NULL;
+//             }
+//             total_memory_sbrk += size - global_head->size;
+//             global_head->size = size;
+//             global_head->free = 0;
+//             block = global_head;
+//             total_memory_requested += size;
+//         } else {
+//             block = sbrk(size + META_SIZE);
+//             if (block == (void *) - 1) {
+//                 return NULL;
+//             }
+//             block->ptr = block + 1;
+//             block->size = size;
+//             block->free = 0;
+//             block->next = global_head;
+//             block->prev = NULL;
+//             if (global_head) {
+//                 global_head->prev = block;
+//             }
+
+//             global_head = block;
+//             total_memory_sbrk += size + META_SIZE;
+//             total_memory_requested += size + META_SIZE;
+//         }
+//     }
+//     return block->ptr;
+// }
+
 void *malloc(size_t size) {
-    block_meta_t *block = NULL;
-
-    if (size <= 0) {
-        return NULL;
-    }
-
-    if (total_memory_sbrk - total_memory_requested >= size) {
-        block = find_free_block(size);
-    }
-    // block = find_free_block(size);
-    if (block) {
-        block = split_block(block, size);
-        total_memory_requested += size;
-        block->free = 0;
-    } else {
-        if (global_head && global_head->free) {
-            if (sbrk(size - global_head->size) == (void *) - 1) {
-                return NULL;
-            }
-            total_memory_sbrk += size - global_head->size;
-            global_head->size = size;
-            global_head->free = 0;
-            block = global_head;
-            total_memory_requested += size;
-        } else {
-            block = sbrk(size + META_SIZE);
-            if (block == (void *) - 1) {
-                return NULL;
-            }
-            block->ptr = block + 1;
-            block->size = size;
-            block->free = 0;
-            block->next = global_head;
-            block->prev = NULL;
-            if (global_head) {
-                global_head->prev = block;
-            }
-
-            global_head = block;
-            total_memory_sbrk += size + META_SIZE;
-            total_memory_requested += size + META_SIZE;
+    // implement malloc!
+    if (size == 0) return NULL; // handle extreme case: size == 0
+    block_meta_t *p = global_head;
+    block_meta_t *chosen = NULL;
+    if (total_memory_sbrk-total_memory_requested >= size) {
+      while(p) {
+        if (p->free && p->size >= size) {
+          chosen = p; // first fit allocation
+          if (splitBlock(size, p)) {
+            total_memory_requested += sizeof(block_meta_t); // consider metadata when coalescing
+          }
+          break;
         }
+        p = p->next;
+      }
     }
-    return block->ptr;
+    if (chosen) {
+      chosen->free = 0;
+      total_memory_requested += chosen->size;
+    } else {
+      if (global_head && global_head->free) {
+        if (sbrk(size-global_head->size) == (void *)-1)
+          return NULL;
+        total_memory_sbrk += size-global_head->size;
+        global_head->size = size;
+        global_head->free = 0;
+        chosen = global_head;
+        total_memory_requested += global_head->size;
+      } else {
+        chosen = sbrk(sizeof(block_meta_t)+size);
+        if (chosen == (void *)-1)
+          return NULL;
+        chosen->ptr = chosen + 1;
+        chosen->size = size;
+        chosen->free = 0;
+        chosen->next = global_head;
+        if (global_head) {
+          chosen->prev = global_head->prev;
+          global_head->prev = chosen;
+        } else {
+          chosen->prev = NULL;
+        }
+        global_head = chosen;
+        total_memory_sbrk += sizeof(block_meta_t)+size;
+        total_memory_requested += sizeof(block_meta_t)+size;
+      }
+    }
+
+    return chosen->ptr;
 }
 
 /**
@@ -284,6 +353,7 @@ void free(void *ptr) {
     total_memory_requested -= block->size;
     // Coalesce adjacent free blocks.
     coalesce(block);
+    return;
 }
 
 
@@ -344,50 +414,73 @@ void coalescePrev(block_meta_t *p) {
  * @see http://www.cplusplus.com/reference/clibrary/cstdlib/realloc/
  */
 
+// void *realloc(void *ptr, size_t size) {
+//     if (!ptr) {
+//         return malloc(size);
+//     }
+
+//     if (size == 0) {
+//         free(ptr);
+//         // return NULL;
+//     }
+
+//     block_meta_t *block = (block_meta_t *)ptr - 1;
+
+//     if (block->size >= 2 * size) {
+//         block = split_block(block, size);
+//         total_memory_requested -= block->prev->size;
+//     }
+
+//     if (block->size >= size) {
+//         return ptr;
+//     } else if (block->prev && block->prev->free && block->size + block->prev->size + sizeof(block_meta_t) >= size) {
+//         total_memory_requested += block->prev->size;
+//         // coalesce(block);
+//         coalescePrev(block);
+//         return block->ptr;
+//             // if (block->size >= size) {
+//             //     split_block(block, size);
+//             //     return ptr;
+//             // }
+//             // return ptr;
+//     }
+
+//         // Allocate new block.
+//     void *new_ptr = malloc(size);
+//     if (!new_ptr) {
+//         return NULL;
+//     }
+//     // Copy data to new block.
+//     // size_t copy_size = (old_size < size) ? old_size : size;
+//     memcpy(new_ptr, ptr, block->size);
+//     // Free old block.
+//     free(ptr);
+//     return new_ptr;
+// }
+
 void *realloc(void *ptr, size_t size) {
-    if (!ptr) {
-        return malloc(size);
+    // implement realloc!
+    if (!ptr) return malloc(size);
+    block_meta_t *entry = ((block_meta_t *)ptr) - 1;
+
+    if (!size) free(ptr);
+    // printf("realloc segfault start\n");
+    if (splitBlock(size, entry)) {
+      total_memory_requested -= entry->prev->size;
     }
-
-    if (size == 0) {
-        free(ptr);
-        // return NULL;
+    // printf("realloc segfault end\n");
+    if (entry->size >= size) {
+      return ptr;
+    } else if (entry->prev && entry->prev->free && entry->size+entry->prev->size+sizeof(block_meta_t) >= size) {
+      total_memory_requested += entry->prev->size;
+      coalescePrev(entry);
+      return entry->ptr;
     }
-
-    block_meta_t *block = (block_meta_t *)ptr - 1;
-
-    if (block->size >= 2 * size) {
-        block = split_block(block, size);
-        total_memory_requested -= block->prev->size;
-    }
-
-    if (block->size >= size) {
-        return ptr;
-    } else if (block->prev && block->prev->free && block->size + block->prev->size + sizeof(block_meta_t) >= size) {
-        total_memory_requested += block->prev->size;
-        // coalesce(block);
-        coalescePrev(block);
-        return block->ptr;
-            // if (block->size >= size) {
-            //     split_block(block, size);
-            //     return ptr;
-            // }
-            // return ptr;
-    }
-
-        // Allocate new block.
     void *new_ptr = malloc(size);
-    if (!new_ptr) {
-        return NULL;
-    }
-    // Copy data to new block.
-    // size_t copy_size = (old_size < size) ? old_size : size;
-    memcpy(new_ptr, ptr, block->size);
-    // Free old block.
+    memcpy(new_ptr, ptr, entry->size);
     free(ptr);
     return new_ptr;
 }
-
 
 /**
  * Allocate space for array in memory
