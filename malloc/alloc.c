@@ -122,31 +122,48 @@ block_meta_t *find_free_block(size_t size) {
 /**
  * Extends the heap by requesting more memory from the OS.
  */
-// block_meta_t *request_space(size_t size) {
-//   block_meta_t *block = NULL;
-//   if (check_add_overflow(size, META_SIZE)) {
-//     return NULL;
-//   }
-//   size_t total_size = size + META_SIZE;
-//   void *sbrk_result = sbrk(total_size);
-//   if (sbrk_result == (void*) -1) {
-//     // sbrk failed.
-//     return NULL;
-//   }
-//   block = sbrk_result;
-//   // if (last) { // NULL on first request.
-//   //     last->next = block;
-//   //     block->prev = last;
-//   // } else {
-//   //     block->prev = NULL;
-//   // }
+block_meta_t *request_space(size_t size) {
+  // block_meta_t *block = NULL;
+  // if (check_add_overflow(size, META_SIZE)) {
+  //   return NULL;
+  // }
+  // size_t total_size = size + META_SIZE;
+  // void *sbrk_result = sbrk(total_size);
+  // if (sbrk_result == (void*) -1) {
+  //   // sbrk failed.
+  //   return NULL;
+  // }
+  // block = sbrk_result;
+  // // if (last) { // NULL on first request.
+  // //     last->next = block;
+  // //     block->prev = last;
+  // // } else {
+  // //     block->prev = NULL;
+  // // }
 
-//   block->size = size;
-//   block->ptr = block + 1;
-//   block->next = NULL;
-//   block->free = 0;
-//   return block;
-// }
+  // block->size = size;
+  // block->ptr = block + 1;
+  // block->next = NULL;
+  // block->free = 0;
+  // return block;
+  block_meta_t* block = sbrk(size + META_SIZE);
+  if (block == (void *) - 1) {
+    return NULL;
+  }
+  block->ptr = block + 1;
+  block->size = size;
+  block->free = 0;
+  block->next = global_head;
+  block->prev = NULL;
+  if (global_head) {
+    global_head->prev = block;
+  }
+
+  global_head = block;
+  total_memory_sbrk += size + META_SIZE;
+  total_memory_requested += size + META_SIZE;
+  return block;
+}
 
 
 void coalescePrevOnly(block_meta_t *block) {
@@ -253,22 +270,23 @@ void *malloc(size_t size) {
       block = global_head;
       total_memory_requested += size;
     } else {
-      block = sbrk(size + META_SIZE);
-      if (block == (void *) - 1) {
-          return NULL;
-      }
-      block->ptr = block + 1;
-      block->size = size;
-      block->free = 0;
-      block->next = global_head;
-      block->prev = NULL;
-      if (global_head) {
-          global_head->prev = block;
-      }
+      // block = sbrk(size + META_SIZE);
+      // if (block == (void *) - 1) {
+      //     return NULL;
+      // }
+      // block->ptr = block + 1;
+      // block->size = size;
+      // block->free = 0;
+      // block->next = global_head;
+      // block->prev = NULL;
+      // if (global_head) {
+      //     global_head->prev = block;
+      // }
 
-      global_head = block;
-      total_memory_sbrk += size + META_SIZE;
-      total_memory_requested += size + META_SIZE;
+      // global_head = block;
+      // total_memory_sbrk += size + META_SIZE;
+      // total_memory_requested += size + META_SIZE;
+      block = request_space(size);
     }
   }
   return block->ptr;
@@ -380,17 +398,17 @@ void *realloc(void *ptr, size_t size) {
     // return ptr;
   }
 
-      // Allocate new block.
-  void *new_ptr = malloc(size);
-  if (!new_ptr) {
+  // Allocate new block.
+  void *new_block = malloc(size);
+  if (!new_block) {
     return NULL;
   }
   // Copy data to new block.
   // size_t copy_size = (old_size < size) ? old_size : size;
-  memcpy(new_ptr, ptr, block->size);
+  memcpy(new_block, ptr, block->size);
   // Free old block.
   free(ptr);
-  return new_ptr;
+  return new_block;
 }
 
 /**
@@ -420,13 +438,13 @@ void *calloc(size_t num, size_t size) {
   if (check_mul_overflow(num, size)) {
     return NULL;
   }
-  size_t total_size = num * size;
-  void *ptr = malloc(total_size);
+  
+  void *ptr = malloc(num * size);
   if (!ptr) {
     return NULL;
   }
   // Initialize memory to zero.
-  memset(ptr, 0, total_size);
+  memset(ptr, 0, num * size);
   return ptr;
 }
 
