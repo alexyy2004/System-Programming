@@ -1,7 +1,7 @@
 /**
  * deadlock_demolition
  * CS 341 - Fall 2024
- * Worked with boyangl3, yueyan2, pjame2 on this lab
+ * Worked with boyangl3, yueyan2, pjame2, yadiqi2 on this lab
  */
 #include "graph.h"
 #include "libdrm.h"
@@ -169,6 +169,10 @@ int drm_wait(drm_t *drm, pthread_t *thread_id) {
     pthread_mutex_unlock(&mut); // let other thread work
     pthread_mutex_lock(&(drm->m));
     pthread_mutex_lock(&mut); 
+
+    if (graph_adjacent(g, thread_id, drm)) {
+        graph_remove_edge(g, thread_id, drm);
+    }
 
     graph_add_edge(g, drm, thread_id);
     pthread_mutex_unlock(&mut);
