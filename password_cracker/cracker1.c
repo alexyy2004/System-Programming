@@ -61,13 +61,13 @@ void *crack_passwords(void *pid) {
 
         // generate by Chatgpt
         do {
-            pthread_mutex_lock(&m);
             hashed = crypt_r(pwd, "xx", &cd);
             hashCount++;
             end_time = getThreadCPUTime();
             if (!strcmp(hashed, task->password_hash)) {
                 flag = true;
                 double total_time = end_time - start_time;
+                pthread_mutex_lock(&m);
                 v1_print_thread_result(threadId, task->username, pwd, hashCount, total_time, 0);
                 num_succeed++;
                 pthread_mutex_unlock(&m);
@@ -75,10 +75,10 @@ void *crack_passwords(void *pid) {
             }
             incrementString(pwd);
             if (strncmp(pwd, task->known_password, getPrefixLength(task->known_password))) {
-                pthread_mutex_unlock(&m);
+                // pthread_mutex_unlock(&m);
                 break;
             }
-            pthread_mutex_unlock(&m);
+            // pthread_mutex_unlock(&m);
         } while (strcmp(pwd, task->known_password));
 
         free(pwd);

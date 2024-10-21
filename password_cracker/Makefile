@@ -47,7 +47,8 @@ PROVIDED_LIBRARIES:=$(shell find libs/ -type f -name '*.a' 2>/dev/null)
 PROVIDED_LIBRARIES:=$(PROVIDED_LIBRARIES:libs/lib%.a=%)
 LDFLAGS = -Llibs/ $(foreach lib,$(PROVIDED_LIBRARIES),-l$(lib)) -lm
 LDFLAGS += -lcrypt -lrt -pthread
-LDFLAGS_TSAN = -ltsan $(LDFLAGS)
+# LDFLAGS_TSAN = -ltsan $(LDFLAGS)
+LDFLAGS_TSAN = $(LDFLAGS) -ltsan
 
 # the string in grep must appear in the hostname, otherwise the Makefile will
 # not allow the assignment to compile
