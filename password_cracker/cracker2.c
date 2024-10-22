@@ -66,8 +66,8 @@ void *crack_passwords(void *pid) {
         long offset = 0;
         long count = 0;
         int known_letter = getPrefixLength(global_task->known_password);
-        int unknown_letter = 8 - known_letter;
         pwd = strdup(global_task->known_password);
+        int unknown_letter = strlen(pwd) - known_letter;
 
         getSubrange(unknown_letter, global_thread_count, threadId, &offset, &count);
         setStringPosition(pwd + known_letter, offset);
