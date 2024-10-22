@@ -59,8 +59,8 @@ int incrementString(char *str);
  * unknown_letter_count - The number of letters in the password that are not
  * known.
  * thread_count - The number of worker threads.
- * thread_id - My thread ID, where the IDs start at 1.
  * start_index - (output parameter) This will be set to the index of
+ * thread_id - My thread ID, where the IDs start at 1.
  * the first possible password this thread should try.
  * count - (output parameter) This will be set to the number of
  * passwords this thread should try.
