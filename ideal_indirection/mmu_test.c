@@ -31,10 +31,8 @@ void read_and_write_1_virtual_address(mmu *test_mmu) {
     char buff[PAGE_SIZE];
     char *test_string = "hello world";
 
-    mmu_write_to_virtual_address(test_mmu, virtual_address, TEST_PID,
-                                 test_string, strlen(test_string) + 1);
-    mmu_read_from_virtual_address(test_mmu, virtual_address, TEST_PID, buff,
-                                  strlen(test_string) + 1);
+    mmu_write_to_virtual_address(test_mmu, virtual_address, TEST_PID, test_string, strlen(test_string) + 1);
+    mmu_read_from_virtual_address(test_mmu, virtual_address, TEST_PID, buff, strlen(test_string) + 1);
     assert(strcmp(buff, test_string) == 0);
 
     assert(test_mmu->num_page_faults == 0);
