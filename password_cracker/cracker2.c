@@ -138,10 +138,6 @@ int start(size_t thread_count) {
     size_t len = 0;
     int read;
 
-    // global_task = calloc(1, sizeof(task_t));
-    // global_task->username = calloc(8+1, sizeof(char));
-    // global_task->password_hash = calloc(13+1, sizeof(char));
-    // global_task->known_password = calloc(8+1, sizeof(char));
     password = calloc(9, sizeof(char));
 
     while ((read = getline(&line, &len, stdin)) != -1) {        
@@ -155,15 +151,11 @@ int start(size_t thread_count) {
             continue;
         }
         global_task = create_task(username, password_hash, known_password);
-        // strcpy(global_task->username, username);
-        // strcpy(global_task->password_hash, password_hash);
-        // strcpy(global_task->known_password, known_password);
         
-        pthread_barrier_wait(&barrier); // wait for all threads to be ready
         double start_time = getTime();
         double cpu_start_time = getCPUTime();
         v2_print_start_user(global_task->username);
-        // pthread_barrier_wait(&barrier); // wait for all threads to be ready
+        pthread_barrier_wait(&barrier); // wait for all threads to be ready
         
         pthread_barrier_wait(&barrier); // wait for all threads to finish
         double end_time = getTime();
