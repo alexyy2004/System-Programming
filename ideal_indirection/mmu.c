@@ -2,7 +2,7 @@
  * ideal_indirection
  * CS 341 - Fall 2024
  */
-// collaborate with boyangl3 and pjame2
+// collaborate with boyangl3, pjame2, and yanzelu2
 #include "mmu.h"
 #include <assert.h>
 #include <dirent.h>
