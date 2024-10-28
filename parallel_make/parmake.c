@@ -97,18 +97,18 @@ bool should_execute_rule(char* target, set* successful_builds) {
             }
         }
         // what if some dependencies are not checked yet? we need to wait for them to be checked.???
-        for (size_t i = 0; i < vector_size(dependencies); i++) {
-            char* dependency = vector_get(dependencies, i);
-            // if (!set_contains(successful_builds, dependency)) {
-            //     vector_destroy(dependencies);
-            //     return false;
-            // }
-            rule_t* rule = (rule_t*)graph_get_vertex_value(g, dependency);
-            if (rule->state == 0) {
-                vector_destroy(dependencies);
-                return false;
-            }
-        }
+        // for (size_t i = 0; i < vector_size(dependencies); i++) {
+        //     char* dependency = vector_get(dependencies, i);
+        //     // if (!set_contains(successful_builds, dependency)) {
+        //     //     vector_destroy(dependencies);
+        //     //     return false;
+        //     // }
+        //     rule_t* rule = (rule_t*)graph_get_vertex_value(g, dependency);
+        //     if (rule->state == 0) {
+        //         vector_destroy(dependencies);
+        //         return false;
+        //     }
+        // }
     } 
 
     // check if target exists on disk
