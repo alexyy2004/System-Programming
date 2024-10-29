@@ -138,7 +138,7 @@ bool should_execute_rule(char* target, set* successful_builds) {
                 time_t target_mod_time = target_stat.st_mtime;
                 time_t dep_mod_time = dep_stat.st_mtime;
                 if (difftime(dep_mod_time, target_mod_time) > 0) {
-                    printf("NHHHHHHHHHHHHH\n");
+                    // printf("NHHHHHHHHHHHHH\n");
                     vector_destroy(dependencies);
                     return true;
                 }
