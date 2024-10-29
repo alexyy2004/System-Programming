@@ -148,7 +148,7 @@ bool should_execute_rule(char* target, set* successful_builds) {
         }
     }
     vector_destroy(dependencies);
-    return true;
+    return false;
 }
 
 // Function to execute commands for a target.
