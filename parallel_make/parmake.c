@@ -113,6 +113,7 @@ bool should_execute_rule(char* target, set* successful_builds) {
 
     // check if target exists on disk
     if (!target_exists_on_disk) {
+        vector_destroy(dependencies);
         return true;
     } else {
         bool has_dependencies_on_disk = false;
@@ -137,6 +138,7 @@ bool should_execute_rule(char* target, set* successful_builds) {
                 time_t target_mod_time = target_stat.st_mtime;
                 time_t dep_mod_time = dep_stat.st_mtime;
                 if (difftime(dep_mod_time, target_mod_time) > 0) {
+                    printf("NHHHHHHHHHHHHH\n");
                     vector_destroy(dependencies);
                     return true;
                 }
@@ -145,6 +147,7 @@ bool should_execute_rule(char* target, set* successful_builds) {
             rule->state = 1; // rule satisfied
         }
     }
+    vector_destroy(dependencies);
     return true;
 }
 
