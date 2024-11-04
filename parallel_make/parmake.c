@@ -263,7 +263,8 @@ void *worker_thread(void *ptr) {
                 rule->state = -1; // Mark rule as failed
                 // break;
                 pthread_mutex_unlock(&m);
-                pthread_cond_signal(&cv);
+                // pthread_cond_signal(&cv);
+                pthread_cond_broadcast(&cv);
                 return NULL;
             }
         }
@@ -271,8 +272,8 @@ void *worker_thread(void *ptr) {
         pthread_mutex_lock(&m);
         rule->state = 1; // Mark rule as completed
         pthread_mutex_unlock(&m);
-        pthread_cond_signal(&cv);
-        // pthread_cond_broadcast(&cv); // Notify waiting threads
+        // pthread_cond_signal(&cv);
+        pthread_cond_broadcast(&cv); // Notify waiting threads
     }
     return NULL;
 }
