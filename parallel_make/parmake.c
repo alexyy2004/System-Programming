@@ -29,7 +29,6 @@ set *visited = NULL;
 queue *q = NULL;
 pthread_mutex_t m;
 pthread_cond_t cv;
-int failed = 0;
 
 
 bool dependencies_satisfied(char *target) {
@@ -167,8 +166,10 @@ bool should_execute_rule(char* target) {
                     break;
                     // return true;
                 } else {
+                    pthread_mutex_lock(&m);
                     rule_t* rule = (rule_t*)graph_get_vertex_value(g, target);
                     rule->state = 1; // rule satisfied
+                    pthread_mutex_unlock(&m);
                 }
             }
 
@@ -182,15 +183,19 @@ bool should_execute_rule(char* target) {
         
         if (rule_nbr->state == -1) {
             flag_run = false;
+            pthread_mutex_lock(&m);
             rule->state = -1;
+            pthread_mutex_unlock(&m);
             // break;
             return false;
         }
 
         if (!(should_execute_rule(dependency)) && (rule_nbr->state == 0 || rule_nbr->state == -1)) {
             flag_run = false;
+            pthread_mutex_lock(&m);
             rule_nbr->state = -1;
             rule->state = -1;
+            pthread_mutex_unlock(&m);
             // break;
             return false;
         }
@@ -254,18 +259,20 @@ void *worker_thread(void *ptr) {
             char *command = vector_get(rule->commands, i);
             // execute_commands(rule->target);
             if (system(command) != 0) {
+                pthread_mutex_lock(&m);
                 rule->state = -1; // Mark rule as failed
                 // break;
+                pthread_mutex_unlock(&m);
                 pthread_cond_signal(&cv);
                 return NULL;
             }
         }
 
-        // pthread_mutex_lock(&m);
+        pthread_mutex_lock(&m);
         rule->state = 1; // Mark rule as completed
+        pthread_mutex_unlock(&m);
         pthread_cond_signal(&cv);
         // pthread_cond_broadcast(&cv); // Notify waiting threads
-        // pthread_mutex_unlock(&m);
     }
     return NULL;
 }
@@ -294,8 +301,10 @@ int parmake(char *makefile, size_t num_threads, char **targets) {
             print_cycle_failure(goal);
         } else {
             if (should_execute_rule(goal)) {
+                pthread_mutex_lock(&m);
                 rule_t *rule = (rule_t *)graph_get_vertex_value(g, goal);
                 rule->state = 0; // Mark rule as not checked yet
+                pthread_mutex_unlock(&m);
             }
         }
     }
