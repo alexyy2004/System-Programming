@@ -32,22 +32,37 @@ pthread_cond_t cv;
 int failed = 0;
 
 
-// Function to check if dependencies are satisfied
 bool dependencies_satisfied(char *target) {
     vector *dependencies = graph_neighbors(g, target);
     bool satisfied = true;
     for (size_t i = 0; i < vector_size(dependencies); i++) {
         char *dependency = vector_get(dependencies, i);
         rule_t *dep_rule = (rule_t *)graph_get_vertex_value(g, dependency);
-        printf("Dependency: %s\n", dependency);
-        printf("Dependency state: %d\n", dep_rule->state);
+        if (dep_rule->state != 1) {
+            satisfied = false;
+            break;
+        }
+    }
+    vector_destroy(dependencies);
+    return satisfied;
+}
+
+// Function to check if dependencies are satisfied
+bool dependencies_checked(char *target) {
+    vector *dependencies = graph_neighbors(g, target);
+    bool satisfied = true;
+    for (size_t i = 0; i < vector_size(dependencies); i++) {
+        char *dependency = vector_get(dependencies, i);
+        rule_t *dep_rule = (rule_t *)graph_get_vertex_value(g, dependency);
+        // printf("Dependency: %s\n", dependency);
+        // printf("Dependency state: %d\n", dep_rule->state);
         if (dep_rule->state == 0) {
             satisfied = false;
             break;
         }
     }
     vector_destroy(dependencies);
-    printf("dependencies_satisfied return\n");
+    // printf("dependencies_satisfied return\n");
     return satisfied;
 }
 
@@ -84,7 +99,7 @@ bool has_cycle(graph* g, char* target) {
 // Function to determine if a rule needs to be executed.
 bool should_execute_rule(char* target) {
 
-    printf("Checking if rule should be executed for target: %s\n", target);
+    // printf("Checking if rule should be executed for target: %s\n", target);
     vector* dependencies = graph_neighbors(g, target);
     bool target_exists_on_disk = (access(target, F_OK) == 0);
     bool flag_run = false;
@@ -184,24 +199,23 @@ bool should_execute_rule(char* target) {
     if (vector_size(dependencies) != 0) {
         pthread_mutex_lock(&m);
         
-        while (!dependencies_satisfied(target)) {
+        while (!dependencies_checked(target)) {
             // printf("waiting for dependencies to be satisfied\n");
             pthread_cond_wait(&cv, &m);
         }
         pthread_mutex_unlock(&m);
     }
 
-    printf("--------------------\n");
-    printf("check if target '%s' should be pushed to queue\n", target);
+    
     if (!dependencies_satisfied(target)) {
-        printf("Dependencies not satisfied\n");
+        // printf("Dependencies not satisfied\n");
         return false;
     }
-    printf("11111111111111111111111111111111111111\n");
+    // printf("11111111111111111111111111111111111111\n");
     if (flag_run) {
         rule_t* rule = (rule_t*)graph_get_vertex_value(g, target);
         if (rule->state == 0 && dependencies_satisfied(target)) {
-            printf("pushing target '%s' to queue\n", target);
+            // printf("pushing target '%s' to queue\n", target);
             queue_push(q, rule);
             return true;
         }
@@ -237,10 +251,6 @@ void *worker_thread(void *ptr) {
             // execute_commands(rule->target);
             if (system(command) != 0) {
                 rule->state = -1; // Mark rule as failed
-                // print which rule fail
-                printf("Rule failed: %s\n", rule->target);
-                // print state of the rule
-                printf("Rule state: %d\n", rule->state);
                 // break;
                 pthread_cond_signal(&cv);
                 return NULL;
