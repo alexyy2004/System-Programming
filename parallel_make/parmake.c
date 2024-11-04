@@ -308,6 +308,5 @@ int parmake(char *makefile, size_t num_threads, char **targets) {
     queue_destroy(q);
     pthread_mutex_destroy(&m);
     pthread_cond_destroy(&cv);
-
     return 0;
 }
