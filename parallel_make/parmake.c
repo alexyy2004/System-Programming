@@ -209,6 +209,7 @@ bool should_execute_rule(char* target) {
     
     if (!dependencies_satisfied(target)) {
         // printf("Dependencies not satisfied\n");
+        vector_destroy(dependencies);
         return false;
     }
     // printf("11111111111111111111111111111111111111\n");
@@ -217,12 +218,15 @@ bool should_execute_rule(char* target) {
         if (rule->state == 0 && dependencies_satisfied(target)) {
             // printf("pushing target '%s' to queue\n", target);
             queue_push(q, rule);
+            vector_destroy(dependencies);
             return true;
         }
         if (rule->state == 1) {
+            vector_destroy(dependencies);
             return false;
         }
         if (rule->state == -1) {
+            vector_destroy(dependencies);
             return false;
         }
     }
