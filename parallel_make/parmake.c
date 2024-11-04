@@ -3,28 +3,53 @@
  * CS 341 - Fall 2024
  */
 
+#include <pthread.h>
 #include <sys/stat.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 #include <stdio.h>
+#include <errno.h>
+#include <unistd.h>
 #include <time.h>
 #include "format.h"
 #include "graph.h"
 #include "parmake.h"
 #include "parser.h"
 #include "set.h"
-#include <sys/types.h>
 #include "vector.h"
-#include <unistd.h>
+#include "queue.h"
 // rule_t->state = 1 -> rule is satisfied
 // rule_t->state = 0 -> rule is not checked yet
 // rule_t->state = -1 -> rule is failed
 
-// Global variable for the dependency graph.
-graph* g = NULL;
-set* visited = NULL;
+// Global variables
+graph *g = NULL;
+set *visited = NULL;
+queue *q = NULL;
+pthread_mutex_t m;
+pthread_cond_t cv;
+int failed = 0;
+
+
+// Function to check if dependencies are satisfied
+bool dependencies_satisfied(char *target) {
+    vector *dependencies = graph_neighbors(g, target);
+    bool satisfied = true;
+    for (size_t i = 0; i < vector_size(dependencies); i++) {
+        char *dependency = vector_get(dependencies, i);
+        rule_t *dep_rule = (rule_t *)graph_get_vertex_value(g, dependency);
+        printf("Dependency: %s\n", dependency);
+        printf("Dependency state: %d\n", dep_rule->state);
+        if (dep_rule->state == 0) {
+            satisfied = false;
+            break;
+        }
+    }
+    vector_destroy(dependencies);
+    printf("dependencies_satisfied return\n");
+    return satisfied;
+}
 
 // Original cycle detection function provided by you.
 bool has_cycle(graph* g, char* target) {
@@ -56,33 +81,14 @@ bool has_cycle(graph* g, char* target) {
     return false;
 }
 
-// Helper function to perform topological sorting.
-void topological_sort(graph* g, char* target, set* visited, vector* sorted) {
-    if (!graph_contains_vertex(g, target) || set_contains(visited, target)) {
-        return;
-    }
-
-    // Mark the target as visited.
-    set_add(visited, target);
-
-    // Get the neighbors (dependencies) of the target.
-    vector* neighbors = graph_neighbors(g, target);
-    for (size_t i = 0; i < vector_size(neighbors); i++) {
-        char* neighbor = vector_get(neighbors, i);
-        // Recursively sort the neighbors.
-        topological_sort(g, neighbor, visited, sorted);
-    }
-
-    // Add the target to the sorted vector (acts like a stack).
-    vector_push_back(sorted, target);
-    vector_destroy(neighbors);
-}
-
 // Function to determine if a rule needs to be executed.
-bool should_execute_rule(char* target, set* successful_builds) {
+bool should_execute_rule(char* target) {
+
+    printf("Checking if rule should be executed for target: %s\n", target);
     vector* dependencies = graph_neighbors(g, target);
     bool target_exists_on_disk = (access(target, F_OK) == 0);
-
+    bool flag_run = false;
+   
     if (dependencies != NULL) { 
         for (size_t i = 0; i < vector_size(dependencies); i++) {
             char* dependency = vector_get(dependencies, i);
@@ -110,11 +116,12 @@ bool should_execute_rule(char* target, set* successful_builds) {
         //     }
         // }
     } 
-
+   
     // check if target exists on disk
     if (!target_exists_on_disk) {
-        vector_destroy(dependencies);
-        return true;
+        flag_run = true;
+        // vector_destroy(dependencies);
+        // return true;
     } else {
         bool has_dependencies_on_disk = false;
         for (size_t i = 0; i < vector_size(dependencies); i++) {
@@ -125,8 +132,9 @@ bool should_execute_rule(char* target, set* successful_builds) {
             }
         }
         if (!has_dependencies_on_disk) {
-            vector_destroy(dependencies);
-            return true;
+            flag_run = true;
+            // vector_destroy(dependencies);
+            // return true;
         } else {
             // check if any dependency has a newer modification time than the target
             for (size_t i = 0; i < vector_size(dependencies); i++) {
@@ -139,100 +147,157 @@ bool should_execute_rule(char* target, set* successful_builds) {
                 time_t dep_mod_time = dep_stat.st_mtime;
                 if (difftime(dep_mod_time, target_mod_time) > 0) {
                     // printf("NHHHHHHHHHHHHH\n");
-                    vector_destroy(dependencies);
-                    return true;
+                    flag_run = true;
+                    // vector_destroy(dependencies);
+                    break;
+                    // return true;
+                } else {
+                    rule_t* rule = (rule_t*)graph_get_vertex_value(g, target);
+                    rule->state = 1; // rule satisfied
                 }
             }
-            rule_t* rule = (rule_t*)graph_get_vertex_value(g, target);
-            rule->state = 1; // rule satisfied
+
+        }
+    }
+
+    rule_t *rule = (rule_t *)graph_get_vertex_value(g, target);
+    for (size_t i = 0; i < vector_size(dependencies); i++) {
+        char* dependency = vector_get(dependencies, i);
+        rule_t *rule_nbr = (rule_t *) graph_get_vertex_value(g, dependency);
+        
+        if (rule_nbr->state == -1) {
+            flag_run = false;
+            rule->state = -1;
+            // break;
+            return false;
+        }
+
+        if (!(should_execute_rule(dependency)) && (rule_nbr->state == 0 || rule_nbr->state == -1)) {
+            flag_run = false;
+            rule_nbr->state = -1;
+            rule->state = -1;
+            // break;
+            return false;
+        }
+    }
+    
+    if (vector_size(dependencies) != 0) {
+        pthread_mutex_lock(&m);
+        
+        while (!dependencies_satisfied(target)) {
+            // printf("waiting for dependencies to be satisfied\n");
+            pthread_cond_wait(&cv, &m);
+        }
+        pthread_mutex_unlock(&m);
+    }
+
+    printf("--------------------\n");
+    printf("check if target '%s' should be pushed to queue\n", target);
+    if (!dependencies_satisfied(target)) {
+        printf("Dependencies not satisfied\n");
+        return false;
+    }
+    printf("11111111111111111111111111111111111111\n");
+    if (flag_run) {
+        rule_t* rule = (rule_t*)graph_get_vertex_value(g, target);
+        if (rule->state == 0 && dependencies_satisfied(target)) {
+            printf("pushing target '%s' to queue\n", target);
+            queue_push(q, rule);
+            return true;
+        }
+        if (rule->state == 1) {
+            return false;
+        }
+        if (rule->state == -1) {
+            return false;
         }
     }
     vector_destroy(dependencies);
     return false;
 }
 
-// Function to execute commands for a target.
-void execute_commands(char* target, set* successful_builds) {
-    // Get the rule associated with the target.
-    rule_t* rule = (rule_t*)graph_get_vertex_value(g, target);
 
-    // Check if the rule needs to be executed.
-    if (!should_execute_rule(target, successful_builds)) {
-        // printf("Target '%s' is up to date.\n", target);
-        // vector_destroy(dependencies);
-        return; // The rule is already satisfied or cannot proceed due to a failed dependency.
-    }
-
-    // Get the commands vector from the rule.
-    vector* commands = rule->commands;
-    if (!commands) {
-        // vector_destroy(dependencies);
-        return;
-    }
-
-    // printf("%ld\n", vector_size(commands));
-    // Execute each command in the vector.
-    for (size_t i = 0; i < vector_size(commands); i++) {
-        char* command = vector_get(commands, i);
-        // printf("%s\n", command);
-        if (system(command) != 0) {
-            // fprintf(stderr, "Error: Command failed for target '%s': %s\n", target, strerror(errno));
-            rule->state = -1; // Mark this rule as failed.
-
-            // Mark this rule as failed by not adding it to the successful_builds set.
-            // vector_destroy(dependencies);
-            return; // Stop further execution on failure.
+// Thread function to process rules from the queue
+void *worker_thread(void *ptr) {
+    while (1) {
+        // printf("Thread %ld\n", pthread_self());
+        // pthread_mutex_lock(&m);
+        rule_t *rule = queue_pull(q);
+    
+        if (!rule) {
+            // pthread_mutex_unlock(&m);
+            queue_push(q, NULL); // Notify other threads to exit
+            break;
         }
+        // pthread_mutex_unlock(&m);
+
+        // Execute commands for the rule
+        for (size_t i = 0; i < vector_size(rule->commands); i++) {
+            char *command = vector_get(rule->commands, i);
+            // execute_commands(rule->target);
+            if (system(command) != 0) {
+                rule->state = -1; // Mark rule as failed
+                // print which rule fail
+                printf("Rule failed: %s\n", rule->target);
+                // print state of the rule
+                printf("Rule state: %d\n", rule->state);
+                // break;
+                pthread_cond_signal(&cv);
+                return NULL;
+            }
+        }
+
+        // pthread_mutex_lock(&m);
+        rule->state = 1; // Mark rule as completed
+        pthread_cond_signal(&cv);
+        // pthread_cond_broadcast(&cv); // Notify waiting threads
+        // pthread_mutex_unlock(&m);
     }
-
-    // If all commands succeed, add this target to the successful_builds set.
-    set_add(successful_builds, target);
-    rule->state = 1; // Mark this rule as satisfied.
-
-    // Clean up resources.
-    // vector_destroy(dependencies);
+    return NULL;
 }
 
+// Main function for parmake
 int parmake(char *makefile, size_t num_threads, char **targets) {
-    // Parse the Makefile into a dependency graph.
+    // Initialize synchronization primitives and queue
+    pthread_mutex_init(&m, NULL);
+    pthread_cond_init(&cv, NULL);
+    q = queue_create(-1);
+
+    // Parse the Makefile and initialize the graph
     g = parser_parse_makefile(makefile, targets);
-    if (!g) {
-        return 1;
+    vector *goals = graph_neighbors(g, "");
+
+    // Create threads
+    pthread_t threads[num_threads];
+    for (size_t i = 0; i < num_threads; i++) {
+        pthread_create(&threads[i], NULL, worker_thread, NULL);
     }
 
-    // Retrieve goal rules (direct descendants of the sentinel node).
-    vector* goals = graph_neighbors(g, "");
-
-    // Create a vector to hold the topologically sorted nodes.
-    vector* sorted = string_vector_create();
-    set* sort_visited = shallow_set_create();
-    set* successful_builds = shallow_set_create();
-
-    // Check for cycles and perform topological sorting if no cycles are found.
+    // Check for cycles and add initial tasks to the queue
     for (size_t i = 0; i < vector_size(goals); i++) {
-        char* goal = vector_get(goals, i);
-        if (graph_contains_vertex(g, goal)) {
-            if (has_cycle(g, goal)) {
-                print_cycle_failure(goal);
-            } else {
-                topological_sort(g, goal, sort_visited, sorted);
+        char *goal = vector_get(goals, i);
+        if (has_cycle(g, goal)) {
+            print_cycle_failure(goal);
+        } else {
+            if (should_execute_rule(goal)) {
+                rule_t *rule = (rule_t *)graph_get_vertex_value(g, goal);
+                rule->state = 0; // Mark rule as not checked yet
             }
         }
     }
 
-    // Execute commands for each rule in topologically sorted order.
-    for (int i = 0; i < (int)vector_size(sorted); i++) {
-        char* target = vector_get(sorted, i);
-        // printf("Target: %s\n", target);
-        execute_commands(target, successful_builds);
+    // Wait for threads to complete
+    queue_push(q, NULL); // Signal threads to terminate
+    for (size_t i = 0; i < num_threads; i++) {
+        pthread_join(threads[i], NULL);
     }
 
-    // Cleanup resources.
+    // Cleanup
     vector_destroy(goals);
-    set_destroy(sort_visited);
-    set_destroy(successful_builds);
-    vector_destroy(sorted);
     graph_destroy(g);
+    queue_destroy(q);
+    pthread_mutex_destroy(&m);
+    pthread_cond_destroy(&cv);
 
     return 0;
 }
