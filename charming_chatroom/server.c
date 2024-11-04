@@ -4,15 +4,21 @@
  */
 #include <arpa/inet.h>
 #include <errno.h>
-#include <netdb.h>
+#include <netdb.h>  // For struct addrinfo
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <stdint.h>  // For intptr_t
 #include <sys/types.h>
 #include <unistd.h>
+
 
 #include "utils.h"
 
@@ -74,23 +80,102 @@ void cleanup() {
  *    - fprtinf to stderr for getaddrinfo
  *    - perror() for any other call
  */
+// void run_server(char *port) {
+//     /*QUESTION 1*/
+//     /*QUESTION 2*/
+//     /*QUESTION 3*/
+
+//     /*QUESTION 8*/
+
+//     /*QUESTION 4*/
+//     /*QUESTION 5*/
+//     /*QUESTION 6*/
+
+//     /*QUESTION 9*/
+
+//     /*QUESTION 10*/
+
+//     /*QUESTION 11*/
+// }
+
 void run_server(char *port) {
-    /*QUESTION 1*/
-    /*QUESTION 2*/
-    /*QUESTION 3*/
+    struct addrinfo hints, *res;
+    int new_client_fd;
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    pthread_t thread_id;
 
-    /*QUESTION 8*/
+    // Initialize server socket
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;        // IPv4
+    hints.ai_socktype = SOCK_STREAM;  // TCP
 
-    /*QUESTION 4*/
-    /*QUESTION 5*/
-    /*QUESTION 6*/
+    if (getaddrinfo(NULL, port, &hints, &res) != 0) {
+        fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(errno));
+        exit(1);
+    }
 
-    /*QUESTION 9*/
+    serverSocket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (serverSocket == -1) {
+        perror("socket");
+        freeaddrinfo(res);
+        exit(1);
+    }
 
-    /*QUESTION 10*/
+    int optval = 1;
+    if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1) {
+        perror("setsockopt");
+        close(serverSocket);
+        freeaddrinfo(res);
+        exit(1);
+    }
 
-    /*QUESTION 11*/
+    if (bind(serverSocket, res->ai_addr, res->ai_addrlen) == -1) {
+        perror("bind");
+        close(serverSocket);
+        freeaddrinfo(res);
+        exit(1);
+    }
+
+    freeaddrinfo(res);
+
+    if (listen(serverSocket, MAX_CLIENTS) == -1) {
+        perror("listen");
+        close(serverSocket);
+        exit(1);
+    }
+
+    printf("Server listening on port %s\n", port);
+
+    while (!endSession) {
+        new_client_fd = accept(serverSocket, (struct sockaddr *)&client_addr, &client_len);
+        if (new_client_fd == -1) {
+            if (errno == EINTR && endSession) {
+                break;  // Graceful exit on signal interrupt
+            }
+            perror("accept");
+            continue;
+        }
+
+        pthread_mutex_lock(&mutex);
+        if (clientsCount < MAX_CLIENTS) {
+            for (int i = 0; i < MAX_CLIENTS; i++) {
+                if (clients[i] == -1) {
+                    clients[i] = new_client_fd;
+                    clientsCount++;
+                    pthread_create(&thread_id, NULL, process_client, (void *)(intptr_t)i);
+                    break;
+                }
+            }
+        } else {
+            // Reject client if MAX_CLIENTS limit reached
+            fprintf(stderr, "Max clients reached. Rejecting new connection.\n");
+            close(new_client_fd);
+        }
+        pthread_mutex_unlock(&mutex);
+    }
 }
+
 
 /**
  * Broadcasts the message to all connected clients.

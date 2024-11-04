@@ -3,8 +3,11 @@
  * CS 341 - Fall 2024
  */
 
+#include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/in.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
@@ -28,9 +31,17 @@ void close_program(int signal);
  * Shuts down connection with 'serverSocket'.
  * Called by close_program upon SIGINT.
  */
+// void close_server_connection() {
+//     // Your code here
+// }
 void close_server_connection() {
-    // Your code here
+    if (serverSocket != -1) {
+        close(serverSocket);
+        serverSocket = -1;
+        printf("Connection closed.\n");
+    }
 }
+
 
 /**
  * Sets up a connection to a chatroom server and returns
@@ -41,19 +52,65 @@ void close_server_connection() {
  *
  * Returns integer of valid file descriptor, or exit(1) on failure.
  */
+// int connect_to_server(const char *host, const char *port) {
+//     /*QUESTION 1*/
+//     /*QUESTION 2*/
+//     /*QUESTION 3*/
+
+//     /*QUESTION 4*/
+//     /*QUESTION 5*/
+
+//     /*QUESTION 6*/
+
+//     /*QUESTION 7*/
+//     return -1;
+// }
 int connect_to_server(const char *host, const char *port) {
-    /*QUESTION 1*/
-    /*QUESTION 2*/
-    /*QUESTION 3*/
+    int sockfd;
+    struct addrinfo hints, *res, *p;
+    int status;
 
-    /*QUESTION 4*/
-    /*QUESTION 5*/
+    // Set up the hints struct for getting address info
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;        // Use IPv4
+    hints.ai_socktype = SOCK_STREAM;  // Use TCP
 
-    /*QUESTION 6*/
+    // Get address information
+    status = getaddrinfo(host, port, &hints, &res);
+    if (status != 0) {
+        fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+        exit(1);
+    }
 
-    /*QUESTION 7*/
-    return -1;
+    // Loop through the results and connect to the first possible
+    for (p = res; p != NULL; p = p->ai_next) {
+        // Create a socket
+        sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if (sockfd == -1) {
+            perror("socket");
+            continue;
+        }
+
+        // Connect to the server
+        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+            close(sockfd);
+            perror("connect");
+            continue;
+        }
+
+        // Successfully connected
+        break;
+    }
+
+    if (p == NULL) {
+        fprintf(stderr, "Failed to connect to the server\n");
+        exit(1);
+    }
+
+    freeaddrinfo(res);
+    return sockfd;
 }
+
 
 typedef struct _thread_cancel_args {
     char **buffer;
