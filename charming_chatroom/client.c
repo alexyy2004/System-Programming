@@ -1,13 +1,12 @@
 /**
  * charming_chatroom
  * CS 341 - Fall 2024
+ * 
+ * Group Member Netids: pjame2, boyangl3, yueyan2
  */
 
-#include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/in.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
@@ -19,7 +18,6 @@
 
 #include "chat_window.h"
 #include "utils.h"
-
 static volatile int serverSocket;
 static pthread_t threads[2];
 
@@ -31,15 +29,18 @@ void close_program(int signal);
  * Shuts down connection with 'serverSocket'.
  * Called by close_program upon SIGINT.
  */
-// void close_server_connection() {
-//     // Your code here
-// }
 void close_server_connection() {
-    if (serverSocket != -1) {
-        close(serverSocket);
-        serverSocket = -1;
-        printf("Connection closed.\n");
+    // Your code here (used chatgpt to find shutdown flag)
+    if (shutdown(serverSocket, SHUT_RDWR) == -1) {
+        perror(NULL);
+        exit(1);
     }
+
+    if (close(serverSocket) == -1) { 
+        perror(NULL);
+        exit(1);
+    }
+    exit(0);
 }
 
 
@@ -52,65 +53,42 @@ void close_server_connection() {
  *
  * Returns integer of valid file descriptor, or exit(1) on failure.
  */
-// int connect_to_server(const char *host, const char *port) {
-//     /*QUESTION 1*/
-//     /*QUESTION 2*/
-//     /*QUESTION 3*/
-
-//     /*QUESTION 4*/
-//     /*QUESTION 5*/
-
-//     /*QUESTION 6*/
-
-//     /*QUESTION 7*/
-//     return -1;
-// }
 int connect_to_server(const char *host, const char *port) {
-    int sockfd;
-    struct addrinfo hints, *res, *p;
+    /*QUESTION 1*/
+    /*QUESTION 2*/
+    /*QUESTION 3*/
+    struct addrinfo hints, *res;
     int status;
-
-    // Set up the hints struct for getting address info
     memset(&hints, 0, sizeof hints);
+
+    /*QUESTION 4*/
+    /*QUESTION 5*/
     hints.ai_family = AF_INET;        // Use IPv4
     hints.ai_socktype = SOCK_STREAM;  // Use TCP
-
-    // Get address information
+    
+    /*QUESTION 6*/
     status = getaddrinfo(host, port, &hints, &res);
     if (status != 0) {
         fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
         exit(1);
     }
 
-    // Loop through the results and connect to the first possible
-    for (p = res; p != NULL; p = p->ai_next) {
-        // Create a socket
-        sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-        if (sockfd == -1) {
-            perror("socket");
-            continue;
-        }
-
-        // Connect to the server
-        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-            close(sockfd);
-            perror("connect");
-            continue;
-        }
-
-        // Successfully connected
-        break;
+    /*QUESTION 7*/
+    int sockfd = 0;
+    sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (sockfd == -1) {
+        perror("socket");
+        exit(1);
     }
 
-    if (p == NULL) {
-        fprintf(stderr, "Failed to connect to the server\n");
+    if (connect(sockfd, res->ai_addr, res->ai_addrlen) == -1) {
+        perror("connect");
         exit(1);
     }
 
     freeaddrinfo(res);
     return sockfd;
 }
-
 
 typedef struct _thread_cancel_args {
     char **buffer;

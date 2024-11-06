@@ -1,24 +1,24 @@
 /**
  * charming_chatroom
  * CS 341 - Fall 2024
+ * 
+ * [Group Working]
+ * Group Member Netids: pjame2, boyangl3, yueyan2
+ * 
+ * [AI Usage]
+ * Referenced ChatGPT on how to use SO_REUSEADDR and SO_REUSEPORT.
  */
 #include <arpa/inet.h>
 #include <errno.h>
-#include <netdb.h>  // For struct addrinfo
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include <netdb.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <stdint.h>  // For intptr_t
 #include <sys/types.h>
 #include <unistd.h>
-
 
 #include "utils.h"
 
@@ -32,15 +32,30 @@ static volatile int endSession;
 static volatile int clientsCount;
 static volatile int clients[MAX_CLIENTS];
 
+static int num_threads;
+
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /**
  * Signal handler for SIGINT.
  * Used to set flag to end server.
  */
-void close_server() {
+void close_server()
+{
     endSession = 1;
     // add any additional flags here you want.
+    // if (shutdown(serverSocket, SHUT_RDWR) == -1)
+    // {
+    //     perror(NULL);
+    //     exit(1);
+    // }
+
+    // if (close(serverSocket) == -1)
+    // {
+    //     perror(NULL);
+    //     exit(1);
+    // }
+    // exit(0);
 }
 
 /**
@@ -48,20 +63,37 @@ void close_server() {
  * Server ending clean up (such as shutting down clients) should be handled
  * here.
  */
-void cleanup() {
-    if (shutdown(serverSocket, SHUT_RDWR) != 0) {
+void cleanup()
+{
+    if (shutdown(serverSocket, SHUT_RDWR) != 0)
+    {
         perror("shutdown():");
     }
     close(serverSocket);
 
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        if (clients[i] != -1) {
-            if (shutdown(clients[i], SHUT_RDWR) != 0) {
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (clients[i] != -1)
+        {
+            if (shutdown(clients[i], SHUT_RDWR) != 0)
+            {
                 perror("shutdown(): ");
             }
             close(clients[i]);
         }
     }
+}
+
+int find_free()
+{
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (clients[i] <= 0)
+        {
+            return i;
+        }
+    }
+    return -1;
 }
 
 /**
@@ -80,102 +112,131 @@ void cleanup() {
  *    - fprtinf to stderr for getaddrinfo
  *    - perror() for any other call
  */
-// void run_server(char *port) {
-//     /*QUESTION 1*/
-//     /*QUESTION 2*/
-//     /*QUESTION 3*/
-
-//     /*QUESTION 8*/
-
-//     /*QUESTION 4*/
-//     /*QUESTION 5*/
-//     /*QUESTION 6*/
-
-//     /*QUESTION 9*/
-
-//     /*QUESTION 10*/
-
-//     /*QUESTION 11*/
-// }
-
-void run_server(char *port) {
-    struct addrinfo hints, *res;
-    int new_client_fd;
-    struct sockaddr_in client_addr;
-    socklen_t client_len = sizeof(client_addr);
-    pthread_t thread_id;
-
-    // Initialize server socket
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET;        // IPv4
-    hints.ai_socktype = SOCK_STREAM;  // TCP
-
-    if (getaddrinfo(NULL, port, &hints, &res) != 0) {
-        fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(errno));
+void run_server(char *port)
+{
+    /*QUESTION 1*/
+    int s;
+    int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock_fd == -1)
+    {
+        perror("socket_failed");
         exit(1);
     }
 
-    serverSocket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (serverSocket == -1) {
-        perror("socket");
+    int reuse = 1;
+
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0)
+    {
+        perror("setsockopt SO_REUSEADDR failed");
+        exit(1);
+    }
+
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse)) < 0)
+    {
+        perror("setsockopt SO_REUSEPORT failed");
+        exit(1);
+    }
+
+    struct addrinfo hints;
+    struct addrinfo *res = NULL;
+
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+    s = getaddrinfo(NULL, port, &hints, &res);
+    if (s != 0)
+    {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
+        
+    }
+
+    if (bind(sock_fd, res->ai_addr, res->ai_addrlen) != 0)
+    {
+        perror(NULL);
         freeaddrinfo(res);
         exit(1);
     }
 
-    int optval = 1;
-    if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1) {
-        perror("setsockopt");
-        close(serverSocket);
+    if (listen(sock_fd, MAX_CLIENTS) != 0)
+    {
+        perror(NULL);
         freeaddrinfo(res);
         exit(1);
     }
 
-    if (bind(serverSocket, res->ai_addr, res->ai_addrlen) == -1) {
-        perror("bind");
-        close(serverSocket);
-        freeaddrinfo(res);
-        exit(1);
-    }
+    pthread_t threads[MAX_CLIENTS];
 
-    freeaddrinfo(res);
+    while (1)
+    {
+        if (endSession == 1)
+        {
+            break;
+        }
+        printf("Waiting for connection...\n");
+        int client_fd = accept(sock_fd, NULL, NULL);
 
-    if (listen(serverSocket, MAX_CLIENTS) == -1) {
-        perror("listen");
-        close(serverSocket);
-        exit(1);
-    }
-
-    printf("Server listening on port %s\n", port);
-
-    while (!endSession) {
-        new_client_fd = accept(serverSocket, (struct sockaddr *)&client_addr, &client_len);
-        if (new_client_fd == -1) {
-            if (errno == EINTR && endSession) {
-                break;  // Graceful exit on signal interrupt
+        if (client_fd == -1) {
+            perror(NULL);
+            exit(1);
+        }
+        if (clientsCount >= MAX_CLIENTS)
+        {
+            // Shut down and close the fd of current client, shutdown client_fd
+            if (shutdown(client_fd, SHUT_RDWR) == -1)
+            {
+                perror(NULL);
+                freeaddrinfo(res);
+                exit(1);
             }
-            perror("accept");
+
+            if (close(client_fd) == -1)
+            {
+                perror(NULL);
+                freeaddrinfo(res);
+                exit(1);
+            }
             continue;
         }
-
         pthread_mutex_lock(&mutex);
-        if (clientsCount < MAX_CLIENTS) {
-            for (int i = 0; i < MAX_CLIENTS; i++) {
-                if (clients[i] == -1) {
-                    clients[i] = new_client_fd;
-                    clientsCount++;
-                    pthread_create(&thread_id, NULL, process_client, (void *)(intptr_t)i);
-                    break;
-                }
-            }
-        } else {
-            // Reject client if MAX_CLIENTS limit reached
-            fprintf(stderr, "Max clients reached. Rejecting new connection.\n");
-            close(new_client_fd);
-        }
+        clientsCount++;
+        int idx = find_free();
+        clients[idx] = client_fd;
         pthread_mutex_unlock(&mutex);
-    }
-}
+        if (idx >= num_threads)
+        {
+            num_threads = idx;
+        }
+        if (idx == -1)
+        {
+            printf("Messed up someone else!");
+        }
 
+        printf("Client %d connected\n", idx);
+        pthread_create(threads + idx, NULL, process_client, (void *)(intptr_t)idx);
+        // if (endSession == 1)
+        // {
+        //     for (int i = 0; i < num_threads; i++) {
+        //         pthread_join(threads[i], NULL);
+        //     }
+        //     break;
+        // }
+    }
+    /*QUESTION 2*/
+    /*QUESTION 3*/
+
+    /*QUESTION 8*/
+
+    /*QUESTION 4*/
+    /*QUESTION 5*/
+    /*QUESTION 6*/
+
+    /*QUESTION 9*/
+
+    /*QUESTION 10*/
+
+    /*QUESTION 11*/
+}
 
 /**
  * Broadcasts the message to all connected clients.
@@ -183,15 +244,20 @@ void run_server(char *port) {
  * message  - the message to send to all clients.
  * size     - length in bytes of message to send.
  */
-void write_to_clients(const char *message, size_t size) {
+void write_to_clients(const char *message, size_t size)
+{
     pthread_mutex_lock(&mutex);
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        if (clients[i] != -1) {
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (clients[i] != -1)
+        {
             ssize_t retval = write_message_size(size, clients[i]);
-            if (retval > 0) {
+            if (retval > 0)
+            {
                 retval = write_all_to_socket(clients[i], message, size);
             }
-            if (retval == -1) {
+            if (retval == -1)
+            {
                 perror("write(): ");
             }
         }
@@ -207,15 +273,18 @@ void write_to_clients(const char *message, size_t size) {
  *
  * Return value not used.
  */
-void *process_client(void *p) {
+void *process_client(void *p)
+{
     pthread_detach(pthread_self());
     intptr_t clientId = (intptr_t)p;
     ssize_t retval = 1;
     char *buffer = NULL;
 
-    while (retval > 0 && endSession == 0) {
+    while (retval > 0 && endSession == 0)
+    {
         retval = get_message_size(clients[clientId]);
-        if (retval > 0) {
+        if (retval > 0)
+        {
             buffer = calloc(1, retval);
             retval = read_all_from_socket(clients[clientId], buffer, retval);
         }
@@ -237,8 +306,10 @@ void *process_client(void *p) {
     return NULL;
 }
 
-int main(int argc, char **argv) {
-    if (argc != 2) {
+int main(int argc, char **argv)
+{
+    if (argc != 2)
+    {
         fprintf(stderr, "%s <port>\n", argv[0]);
         return -1;
     }
@@ -246,7 +317,8 @@ int main(int argc, char **argv) {
     struct sigaction act;
     memset(&act, '\0', sizeof(act));
     act.sa_handler = close_server;
-    if (sigaction(SIGINT, &act, NULL) < 0) {
+    if (sigaction(SIGINT, &act, NULL) < 0)
+    {
         perror("sigaction");
         return 1;
     }
