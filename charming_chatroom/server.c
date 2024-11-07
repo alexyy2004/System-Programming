@@ -32,7 +32,7 @@ static volatile int endSession;
 static volatile int clientsCount;
 static volatile int clients[MAX_CLIENTS];
 
-static int num_threads;
+// static int num_threads;
 
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -90,6 +90,7 @@ int find_free()
     {
         if (clients[i] <= 0)
         {
+            printf("Found free client at %d\n", i);
             return i;
         }
     }
@@ -148,25 +149,31 @@ void run_server(char *port)
     if (s != 0)
     {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
-        
+        exit(1);
     }
 
     if (bind(sock_fd, res->ai_addr, res->ai_addrlen) != 0)
     {
         perror(NULL);
-        freeaddrinfo(res);
+        // freeaddrinfo(res);
         exit(1);
     }
 
     if (listen(sock_fd, MAX_CLIENTS) != 0)
     {
         perror(NULL);
-        freeaddrinfo(res);
+        // freeaddrinfo(res);
         exit(1);
     }
 
-    pthread_t threads[MAX_CLIENTS];
+    serverSocket = sock_fd;
+    freeaddrinfo(res);
 
+    pthread_t threads[MAX_CLIENTS];
+    size_t i = 0;
+    for (; i < MAX_CLIENTS; i++) {
+        clients[i] = -1;
+    }
     while (1)
     {
         if (endSession == 1)
@@ -175,25 +182,27 @@ void run_server(char *port)
         }
         printf("Waiting for connection...\n");
         int client_fd = accept(sock_fd, NULL, NULL);
-
+        
         if (client_fd == -1) {
             perror(NULL);
+            // freeaddrinfo(res);
             exit(1);
         }
+        
         if (clientsCount >= MAX_CLIENTS)
         {
             // Shut down and close the fd of current client, shutdown client_fd
             if (shutdown(client_fd, SHUT_RDWR) == -1)
             {
                 perror(NULL);
-                freeaddrinfo(res);
+                // freeaddrinfo(res);
                 exit(1);
             }
 
             if (close(client_fd) == -1)
             {
                 perror(NULL);
-                freeaddrinfo(res);
+                // freeaddrinfo(res);
                 exit(1);
             }
             continue;
@@ -201,16 +210,15 @@ void run_server(char *port)
         pthread_mutex_lock(&mutex);
         clientsCount++;
         int idx = find_free();
-        clients[idx] = client_fd;
-        pthread_mutex_unlock(&mutex);
-        if (idx >= num_threads)
-        {
-            num_threads = idx;
-        }
+        // if (idx >= num_threads)
+        // {
+        //     num_threads = idx;
+        // }
         if (idx == -1)
         {
             printf("Messed up someone else!");
         }
+        clients[idx] = client_fd;
 
         printf("Client %d connected\n", idx);
         pthread_create(threads + idx, NULL, process_client, (void *)(intptr_t)idx);
@@ -221,21 +229,10 @@ void run_server(char *port)
         //     }
         //     break;
         // }
+        pthread_mutex_unlock(&mutex);
     }
-    /*QUESTION 2*/
-    /*QUESTION 3*/
-
-    /*QUESTION 8*/
-
-    /*QUESTION 4*/
-    /*QUESTION 5*/
-    /*QUESTION 6*/
-
-    /*QUESTION 9*/
-
-    /*QUESTION 10*/
-
-    /*QUESTION 11*/
+    // freeaddrinfo(res);
+    
 }
 
 /**
