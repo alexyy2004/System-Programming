@@ -1,8 +1,10 @@
 /**
  * charming_chatroom
  * CS 341 - Fall 2024
- * 
+ *
+ * [Group Working]
  * Group Member Netids: pjame2, boyangl3, yueyan2
+ *
  */
 
 #include <errno.h>
@@ -40,7 +42,6 @@ void close_server_connection() {
         perror(NULL);
         exit(1);
     }
-    exit(0);
 }
 
 
@@ -78,11 +79,13 @@ int connect_to_server(const char *host, const char *port) {
     sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (sockfd == -1) {
         perror("socket");
+        freeaddrinfo(res);
         exit(1);
     }
 
     if (connect(sockfd, res->ai_addr, res->ai_addrlen) == -1) {
         perror("connect");
+        freeaddrinfo(res);
         exit(1);
     }
 

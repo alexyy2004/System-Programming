@@ -1,9 +1,12 @@
 /**
  * charming_chatroom
  * CS 341 - Fall 2024
- * 
+ *
+ * [Group Working]
  * Group Member Netids: pjame2, boyangl3, yueyan2
+ *
  */
+
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>

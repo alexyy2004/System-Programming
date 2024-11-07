@@ -1,10 +1,10 @@
 /**
  * charming_chatroom
  * CS 341 - Fall 2024
- * 
+ *
  * [Group Working]
  * Group Member Netids: pjame2, boyangl3, yueyan2
- * 
+ *
  * [AI Usage]
  * Referenced ChatGPT on how to use SO_REUSEADDR and SO_REUSEPORT.
  */
@@ -90,7 +90,7 @@ int find_free()
     {
         if (clients[i] <= 0)
         {
-            printf("Found free client at %d\n", i);
+            // printf("Found free client at %d\n", i);
             return i;
         }
     }
@@ -126,21 +126,22 @@ void run_server(char *port)
 
     int reuse = 1;
 
-    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0)
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int)) < 0)
     {
         perror("setsockopt SO_REUSEADDR failed");
+        close(sock_fd);
         exit(1);
     }
 
-    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse)) < 0)
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(int)) < 0)
     {
         perror("setsockopt SO_REUSEPORT failed");
+        close(sock_fd);
         exit(1);
     }
 
     struct addrinfo hints;
     struct addrinfo *res = NULL;
-
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
@@ -156,6 +157,7 @@ void run_server(char *port)
     {
         perror(NULL);
         // freeaddrinfo(res);
+        close(sock_fd);
         exit(1);
     }
 
@@ -163,6 +165,7 @@ void run_server(char *port)
     {
         perror(NULL);
         // freeaddrinfo(res);
+        close(sock_fd);
         exit(1);
     }
 
@@ -171,7 +174,8 @@ void run_server(char *port)
 
     pthread_t threads[MAX_CLIENTS];
     size_t i = 0;
-    for (; i < MAX_CLIENTS; i++) {
+    for (; i < MAX_CLIENTS; i++)
+    {
         clients[i] = -1;
     }
     while (1)
@@ -182,14 +186,17 @@ void run_server(char *port)
         }
         printf("Waiting for connection...\n");
         int client_fd = accept(sock_fd, NULL, NULL);
-        
-        if (client_fd == -1) {
+
+        if (client_fd == -1)
+        {
             perror(NULL);
             // freeaddrinfo(res);
             exit(1);
         }
-        
-        if (clientsCount >= MAX_CLIENTS)
+
+        pthread_mutex_lock(&mutex);
+        clientsCount++;
+        if (clientsCount > MAX_CLIENTS)
         {
             // Shut down and close the fd of current client, shutdown client_fd
             if (shutdown(client_fd, SHUT_RDWR) == -1)
@@ -205,10 +212,11 @@ void run_server(char *port)
                 // freeaddrinfo(res);
                 exit(1);
             }
+            clientsCount--;
+            pthread_mutex_unlock(&mutex);
             continue;
         }
-        pthread_mutex_lock(&mutex);
-        clientsCount++;
+        
         int idx = find_free();
         // if (idx >= num_threads)
         // {
@@ -232,7 +240,6 @@ void run_server(char *port)
         pthread_mutex_unlock(&mutex);
     }
     // freeaddrinfo(res);
-    
 }
 
 /**
