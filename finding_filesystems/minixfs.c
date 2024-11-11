@@ -38,12 +38,32 @@ int minixfs_virtual_path_count =
 
 int minixfs_chmod(file_system *fs, char *path, int new_permissions) {
     // Thar she blows!
+    inode *node = get_inode(fs, path);
+    if (!node) {
+        errno = ENOENT;
+        return -1;
+    }
+    uint16_t temp = node->mode >> RWX_BITS_NUMBER;
+    node->mode = new_permissions | (temp << RWX_BITS_NUMBER) ;
+    clock_gettime(CLOCK_REALTIME, &(node->ctim));
     return 0;
 }
 
 int minixfs_chown(file_system *fs, char *path, uid_t owner, gid_t group) {
     // Land ahoy!
-    return -1;
+    inode *node = get_inode(fs, path);
+    if (!node) {
+        errno = ENOENT;
+        return -1;
+    }
+    if (owner != ((uid_t)-1)) {
+        node->uid = owner;
+    }
+    if (group != ((uid_t)-1)) {
+        node->gid = group;
+    }
+    clock_gettime(CLOCK_REALTIME, &(node->ctim));
+    return 0;
 }
 
 inode *minixfs_create_inode_for_path(file_system *fs, const char *path) {
