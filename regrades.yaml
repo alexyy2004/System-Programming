@@ -1,0 +1,34 @@
+# Mark an assignment for regrading by changing false to true
+# If you mark more assignments than you are allowed for regrades
+# we will use the first 5 to 6 (depending on lab attendance) units specified.
+# Note that you may not regrade the networking MP.
+# See the Regrade Policy post on EdStem for details.
+
+---
+assignments:
+  charming_chatroom: false
+  critical_concurrency: false
+  deadlock_demolition: false
+  extreme_edge_cases: false
+  finding_filesystems: false
+  ideal_indirection: false
+  luscious_locks: false
+  mad_mad_access_patterns: false
+  malloc:
+    pt1: false
+    pt2: false
+  mapreduce: false
+  mini_memcheck: false
+  parallel_make:
+    pt1: false
+    pt2: false
+  password_cracker: false
+  perilous_pointers: false
+  deepfried_dd: false
+  savvy_scheduler: false
+  shell:
+    pt1: false
+    pt2: false
+  teaching_threads: false
+  utilities_unleashed: false
+  vector: false
