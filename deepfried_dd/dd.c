@@ -1,6 +1,8 @@
 /**
  * deepfried_dd
  * CS 341 - Fall 2024
+ * [Group Working]
+ * Group Member Netids: pjame2, boyangl3, yueyan2
  */
 #include "format.h"
 #include <signal.h>
