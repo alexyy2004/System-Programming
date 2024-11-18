@@ -17,6 +17,7 @@
 #include <netdb.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 
 #include "common.h"
 
@@ -144,21 +145,35 @@ void handle_request(int sockfd, verb command, char **args) {
         }
 
         case PUT: {
-            FILE *file = fopen(args[4], "rb");
+            struct stat buf;
+            if(stat(args[4], &buf) == -1) {
+                exit(1);
+            }    
+            size_t size = buf.st_size;
+            write_to_socket(sockfd, (char*)&size, sizeof(size_t));
+            FILE *file = fopen(args[4], "r");
             if (!file) {
                 perror("fopen");
                 exit(EXIT_FAILURE);
             }
 
-            // Prepare header
-            snprintf(buffer, MAX_HEADER, "PUT %s\n", args[3]);
-            write_to_server(sockfd, buffer, strlen(buffer));
-
-            // Send file data
-            size_t bytes;
-            while ((bytes = fread(buffer, 1, BUFFER_SIZE, file)) > 0) {
-                write_to_server(sockfd, buffer, bytes);
+            size_t bytes_write = 0;
+            while (bytes_write < size) {
+                ssize_t size_remain = 0;
+                if ((size - bytes_write) > BUFFER_SIZE) {
+                    size_remain = BUFFER_SIZE;
+                } else {
+                    size_remain = size - bytes_write;
+                }
+                char buffer[size_remain + 1];
+                fread(buffer, 1, size_remain, file);
+                if (write_to_socket(sockfd, buffer, size_remain) < size_remain) {
+                    print_connection_closed();
+                    exit(1);
+                }
+                bytes_write += size_remain;
             }
+
             fclose(file);
 
             // Read server response

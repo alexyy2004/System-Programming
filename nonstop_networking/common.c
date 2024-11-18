@@ -28,3 +28,22 @@ ssize_t read_from_socket(int sockfd, char *buffer, size_t length) {
 
     return total_bytes_read; // Return the total bytes read
 }
+
+ssize_t write_to_socket(int sockfd, const char *buffer, size_t length) {
+    size_t total_bytes_written = 0;
+    while (total_bytes_written < length) {
+        ssize_t bytes_written = write(sockfd, buffer + total_bytes_written, length - total_bytes_written);
+
+        if (bytes_written < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            perror("write");
+            return -1;
+        }
+
+        total_bytes_written += bytes_written;
+    }
+
+    return 0;
+}

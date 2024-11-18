@@ -18,3 +18,4 @@
 typedef enum { GET, PUT, DELETE, LIST, V_UNKNOWN } verb;
 
 ssize_t read_from_socket(int socket, char *buffer, size_t size);
+ssize_t write_to_socket(int sockfd, const char *buffer, size_t length);
