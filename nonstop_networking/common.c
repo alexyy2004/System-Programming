@@ -29,21 +29,48 @@ ssize_t read_from_socket(int sockfd, char *buffer, size_t length) {
     return total_bytes_read; // Return the total bytes read
 }
 
-ssize_t write_to_socket(int sockfd, const char *buffer, size_t length) {
-    size_t total_bytes_written = 0;
-    while (total_bytes_written < length) {
-        ssize_t bytes_written = write(sockfd, buffer + total_bytes_written, length - total_bytes_written);
-
-        if (bytes_written < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            perror("write");
-            return -1;
+ssize_t write_to_socket(int socket, const char *buffer, size_t count)
+{
+    // Your Code Here
+    ssize_t total_write = 0;
+    while (total_write < (ssize_t)count)
+    {
+        ssize_t write_result = write(socket, buffer + total_write, count - total_write);
+        if (write_result == 0)
+        { // Finished. Break and return
+            return total_write;
         }
-
-        total_bytes_written += bytes_written;
+        else if (write_result > 0)
+        { // Add bytes to total
+            total_write += write_result;
+        }
+        else if (write_result < 0)
+        { // Failure, check if error was interrupted
+            if (errno != EINTR)
+            { // error was NOT interrupted
+                return -1;
+            }
+        }
     }
-
-    return 0;
+    return total_write;
 }
+
+
+// ssize_t write_to_socket(int sockfd, const char *buffer, size_t length) {
+//     size_t total_bytes_written = 0;
+//     while (total_bytes_written < length) {
+//         ssize_t bytes_written = write(sockfd, buffer + total_bytes_written, length - total_bytes_written);
+
+//         if (bytes_written < 0) {
+//             if (errno == EINTR) {
+//                 continue;
+//             }
+//             perror("write");
+//             return -1;
+//         }
+
+//         total_bytes_written += bytes_written;
+//     }
+
+//     return 0;
+// }

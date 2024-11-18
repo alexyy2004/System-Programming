@@ -66,10 +66,10 @@ int connect_to_server(const char *host, const char *port) {
 
     freeaddrinfo(res);
     return sockfd;
-}
+}      
 
 void read_from_server(char **args, int sockfd, verb command) {
-    char* buffer = malloc(sizeof("OK\n"));
+    char* buffer = malloc(sizeof("OK\n") + 1);
     size_t byte_read = read_from_socket(sockfd, buffer, sizeof("OK\n"));
     if (strcmp(buffer, "OK\n") == 0) {
         fprintf(stdout, "%s", buffer);
@@ -82,8 +82,11 @@ void read_from_server(char **args, int sockfd, verb command) {
                 char buffer_temp[file_size+2];
                 memset(buffer_temp, 0, file_size+2);
                 byte_read = read_from_socket(sockfd, buffer_temp, file_size+1);
+                // fprintf(stdout, "%zu%s", file_size, buffer_temp);
                 // error check
                 if (byte_read == 0 && byte_read != file_size) {  
+                    // fprintf(stderr, "byte_read: %zu, file_size: %zu", byte_read, file_size);
+                    LOG("byte_read: %zu, file_size: %zu", byte_read, file_size);
                     print_connection_closed();
                     exit(1);
                 } else if (byte_read < file_size) {
@@ -98,6 +101,7 @@ void read_from_server(char **args, int sockfd, verb command) {
             }
         }
     }
+    free(buffer);
 }
 
 int write_to_server(int sockfd, char* buffer, size_t length) {
@@ -157,6 +161,18 @@ void handle_request(int sockfd, verb command, char **args) {
         }
 
         case PUT: {
+            buffer = calloc(1, strlen(args[2])+strlen(args[3])+3);
+            snprintf(buffer, MAX_HEADER, "PUT %s\n", args[3]);
+            // write_to_socket(sockfd, buffer, strlen(buffer));
+            // free(buffer);
+            ssize_t bytes_written = write_to_socket(sockfd, buffer, strlen(buffer));
+            ssize_t real_size = strlen(buffer);
+            if (bytes_written < real_size) {
+                LOG("!!!!!!write_to_socket failed");
+                print_connection_closed();
+                exit(1);
+            }
+
             struct stat buf;
             if(stat(args[4], &buf) == -1) {
                 exit(1);
@@ -180,6 +196,7 @@ void handle_request(int sockfd, verb command, char **args) {
                 char buffer[size_remain + 1];
                 fread(buffer, 1, size_remain, file);
                 if (write_to_socket(sockfd, buffer, size_remain) < size_remain) {
+                    LOG("write_to_socket failed");
                     print_connection_closed();
                     exit(1);
                 }
