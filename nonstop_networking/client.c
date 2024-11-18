@@ -138,8 +138,8 @@ void handle_request(int sockfd, verb command, char **args) {
         case DELETE: {
             snprintf(buffer, MAX_HEADER, "DELETE %s\n", args[3]);
             write_to_server(sockfd, buffer, strlen(buffer));
-            read_from_server(sockfd, buffer, BUFFER_SIZE);
             printf("%s", buffer);
+            print_success();
             break;
         }
 
@@ -162,8 +162,8 @@ void handle_request(int sockfd, verb command, char **args) {
             fclose(file);
 
             // Read server response
-            read_from_server(sockfd, buffer, BUFFER_SIZE);
             printf("%s", buffer);
+            print_success();
             break;
         }
 
