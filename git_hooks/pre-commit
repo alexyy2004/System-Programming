@@ -1,0 +1,19 @@
+#!/bin/sh
+#
+# Pre-commit hook that prevents students from modifying the given header files
+#
+
+headers_changed=$(git diff --name-only --cached | grep ".*\.h" -)
+if [ "$headers_changed" = "" ]; then
+	exit 0
+fi
+RED='\033[0;31m'
+BOLD='\033[1m'
+CLEAR='\033[0m' # No Color
+echo "This commit has been aborted because the following header files have been modified:
+
+${RED}${headers_changed}${CLEAR}
+
+Please ${BOLD}do not modify${CLEAR} the given header files. The auto-grader compiles your code using 
+our original headers, so modifying the headers could cause your code to fail to compile on the grader."
+exit 1
