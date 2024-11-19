@@ -36,6 +36,7 @@ void handle_request(int sockfd, verb command, char **args);
  * port - Port to connect to server on.
  *
  * Returns integer of valid file descriptor, or exit(1) on failure.
+ * use the connect_to_server from charming_chatroom lab, which collaborates with pjame2, boyangl3
  */
 int connect_to_server(const char *host, const char *port) {
     struct addrinfo hints, *res;

@@ -3,7 +3,7 @@
  * CS 341 - Fall 2024
  */
 #include "common.h"
-
+// use the write_to_socket from charming_chatroom lab, which collaborates with pjame2, boyangl3
 ssize_t read_from_socket(int sockfd, char *buffer, size_t length) {
     size_t total_bytes_read = 0; // Tracks the total bytes read
     while (total_bytes_read < length) {
