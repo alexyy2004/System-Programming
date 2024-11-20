@@ -57,14 +57,14 @@ int main(int argc, char **argv) {
   FILE *file = fopen(argv[1], "r");
   if (file == NULL) {
     openFail(argv[1]);
-    exit(1);
+    exit(2);
   }
 
   char root[4];
   fread(root, 1, 4, file);
   if (strcmp(root, "BTRE") != 0) {
     formatFail(argv[1]);
-    exit(1);
+    exit(2);
   }
   // printf("root is: %s\n", root);
 

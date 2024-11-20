@@ -54,14 +54,14 @@ int main(int argc, char **argv) {
   FILE *file = fopen(argv[1], "r");
   if (file == NULL) {
     openFail(argv[1]);
-    exit(1);
+    exit(2);
   }
 
   struct stat sb;
   int fd = open(argv[1], O_RDONLY);
   if (fd < 0) {
     openFail(argv[1]);
-    exit(1);
+    exit(2);
   }
   fstat(fd, &sb);
 
@@ -69,12 +69,12 @@ int main(int argc, char **argv) {
   // printf("addr is: %c\n", *(addr+1));
   if (addr == MAP_FAILED) {
     mmapFail(argv[1]);
-    exit(1);
+    exit(3);
   }
 
   if (strncmp(addr, "BTRE", 4) != 0) {
     formatFail(argv[1]);
-    exit(1);
+    exit(2);
   }
 
   for (int i = 2; i < argc; i++) {
