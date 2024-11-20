@@ -49,6 +49,10 @@ int BinarySearch(FILE* file, char* word, int offset) {
 }
 
 int main(int argc, char **argv) {
+  if (argc < 3) {
+    printArgumentUsage();
+  }
+
   FILE *file = fopen(argv[1], "r");
   if (file == NULL) {
     openFail(argv[1]);
@@ -61,11 +65,12 @@ int main(int argc, char **argv) {
     formatFail(argv[1]);
     exit(1);
   }
+  // printf("root is: %s\n", root);
 
   for (int i = 2; i < argc; i++) {
     char* target = argv[i];
     int find = BinarySearch(file, target, 4);
-    if (!find) {
+    if (find == 0) {
       printNotFound(target);
     }
     // free(target);
