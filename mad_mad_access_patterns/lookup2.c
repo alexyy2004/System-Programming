@@ -2,7 +2,7 @@
  * mad_mad_access_patterns
  * CS 341 - Fall 2024
  * [Group Working]
- * Group Member Netids: pjame2, boyangl3, yueyan2
+ * Group Member Netids: pjame2, boyangl3, yueyan2, yanzelu2
  */
 #include "tree.h"
 #include "utils.h"
