@@ -51,6 +51,7 @@ int BinarySearch(FILE* file, char* word, int offset) {
 int main(int argc, char **argv) {
   if (argc < 3) {
     printArgumentUsage();
+    exit(1);
   }
 
   FILE *file = fopen(argv[1], "r");
