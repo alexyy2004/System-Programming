@@ -152,6 +152,21 @@ void read_from_server(char **args, int sockfd, verb command) {
                 }
             }
         }
+    } else {
+        buffer = realloc(buffer, strlen("ERROR\n") + 1);
+        read_from_socket(sockfd, buffer + strlen("OK\n"), strlen("ERROR\n") - strlen("OK\n"));
+        // LOG("buffer: %s", buffer);
+        // LOG("strcmp: %d", strcmp(buffer, "ERROR\n"));   
+        if (strcmp(buffer, "ERROR\n") == 0) {
+            fprintf(stdout, "%s", buffer);
+            char err[20] = {0};
+            if (!read_from_socket(sockfd, err, 20))
+                print_connection_closed();
+            print_error_message(err);
+        } else {
+            print_invalid_response();
+        }
+        free(buffer);
     }
     // free(buffer);
 }
@@ -213,6 +228,7 @@ void handle_request(int sockfd, verb command, char **args) {
                 print_connection_closed();
                 exit(1);
             }
+            free(buffer);
             if (shutdown(sockfd, SHUT_WR) != 0) {
                 perror("shutdown()");
             }
@@ -277,17 +293,19 @@ void handle_request(int sockfd, verb command, char **args) {
         }
 
         default: { //todo
-            size_t bytes_rd = read_from_socket(sockfd, buffer, strlen("ERROR\n"));
-            read_from_socket(sockfd, buffer+bytes_rd, strlen("ERROR\n")-bytes_rd);
-            if (strcmp(buffer, "ERROR\n") == 0) {
-                fprintf(stdout, "%s", buffer);
-                char err[20] = {0};
-                if (!read_from_socket(sockfd, err, 20))
-                    print_connection_closed();
-                print_error_message(err);
-            } else {
-                print_invalid_response();
+            buffer = calloc(1, strlen(args[2])+strlen(args[3])+3);
+            snprintf(buffer, MAX_HEADER, args[2], args[3]);
+            ssize_t bytes_written = write_to_socket(sockfd, buffer, strlen(buffer));
+            if ((size_t)bytes_written < strlen(buffer)) {
+                print_connection_closed();
+                exit(1);
             }
+            free(buffer);
+            if (shutdown(sockfd, SHUT_WR) != 0) {
+                perror("shutdown()");
+            }
+
+            read_from_server(args, sockfd, command);
         }
     }
     // free(buffer);
@@ -301,7 +319,7 @@ int main(int argc, char **argv) {
 
     int socketserver = connect_to_server(args[0], args[1]);
     handle_request(socketserver, request, args);
-
+    shutdown(socketserver, SHUT_RD);
     close(socketserver);
     free(args);
 
