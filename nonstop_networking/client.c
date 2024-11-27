@@ -70,10 +70,15 @@ int connect_to_server(const char *host, const char *port) {
 }      
 
 void read_from_server(char **args, int sockfd, verb command) {
-    char* buffer = malloc(sizeof("OK\n") + 1);
-    size_t byte_read = read_from_socket(sockfd, buffer, sizeof("OK\n"));
+    char* buffer = calloc(1, strlen("OK\n") + 1);
+    size_t byte_read = read_from_socket(sockfd, buffer, strlen("OK\n"));
+    // fprintf(stdout, "balsjdblasbdjlbawlbd\n");
+    // fprintf(stdout, "%d", strcmp(buffer, "OK\n"));
+    
     if (strcmp(buffer, "OK\n") == 0) {
         fprintf(stdout, "%s", buffer);
+        // LOG("OK");
+        free(buffer);
         if (command == DELETE || command == PUT) {
             print_success();
         } else {
@@ -91,6 +96,7 @@ void read_from_server(char **args, int sockfd, verb command) {
                     print_connection_closed();
                     exit(1);
                 } else if (byte_read < file_size) {
+
                     print_too_little_data();
                     exit(1);
                 } else if (byte_read > file_size) {
@@ -100,9 +106,54 @@ void read_from_server(char **args, int sockfd, verb command) {
                     fprintf(stdout, "%zu%s", file_size, buffer_temp);
                 }
             }
+            if (command == GET) { //todo
+                FILE *file = fopen(args[4], "w");
+                if (!file) {
+                    perror("fopen");
+                    exit(1);
+                }
+                size_t file_size;
+                read_from_socket(sockfd, (char *)&file_size, sizeof(size_t));
+                
+                size_t byte_write = 0;
+                while (byte_write < file_size) {
+                    ssize_t size_remain = 0;
+                    if ((file_size - byte_write) > BUFFER_SIZE) {
+                        size_remain = BUFFER_SIZE;
+                    } else {
+                        size_remain = file_size - byte_write;
+                    }
+                    char buffer_temp[size_remain + 1];
+                    if (read_from_socket(sockfd, buffer_temp, size_remain) < size_remain) {
+                        LOG("read_from_socket failed");
+                        print_connection_closed();
+                        exit(1);
+                    }
+                    fwrite(buffer_temp, 1, size_remain, file);
+                    byte_write += size_remain;
+                }
+                
+
+                // error check
+                if (byte_write == 0 && byte_write != file_size) {  
+                    // fprintf(stderr, "byte_read: %zu, file_size: %zu", byte_read, file_size);
+                    LOG("byte_read: %zu, file_size: %zu", byte_write, file_size);
+                    print_connection_closed();
+                    exit(1);
+                } else if (byte_write < file_size) {
+                    print_too_little_data();
+                    exit(1);
+                } else if (byte_write > file_size) {
+                    print_received_too_much_data();
+                    exit(1);
+                } else {
+                    // fprintf(stdout, "%zu%s", file_size, buffer_temp);
+                    fclose(file);
+                }
+            }
         }
     }
-    free(buffer);
+    // free(buffer);
 }
 
 int write_to_server(int sockfd, char* buffer, size_t length) {
@@ -132,6 +183,7 @@ void handle_request(int sockfd, verb command, char **args) {
             if (shutdown(sockfd, SHUT_WR) != 0) {
                 perror("shutdown()");
             }
+            free(buffer);
 
             read_from_server(args, sockfd, command);
             break;
@@ -139,8 +191,12 @@ void handle_request(int sockfd, verb command, char **args) {
         case GET: { //todo
             buffer = calloc(1, strlen(args[2])+strlen(args[3])+3);
             snprintf(buffer, MAX_HEADER, "GET %s\n", args[3]);
-            write_to_server(sockfd, buffer, strlen(buffer));
-
+            ssize_t bytes_written = write_to_socket(sockfd, buffer, strlen(buffer));
+            if ((size_t)bytes_written < strlen(buffer)) {
+                print_connection_closed();
+                exit(1);
+            }
+            free(buffer);
             if (shutdown(sockfd, SHUT_WR) != 0) {
                 perror("shutdown()");
             }
@@ -149,10 +205,14 @@ void handle_request(int sockfd, verb command, char **args) {
             break;
         }
 
-        case DELETE: { //todo
+        case DELETE: { // need to check
+            buffer = calloc(1, strlen(args[2])+strlen(args[3])+3);
             snprintf(buffer, MAX_HEADER, "DELETE %s\n", args[3]);
-            write_to_server(sockfd, buffer, strlen(buffer));
-
+            ssize_t bytes_written = write_to_socket(sockfd, buffer, strlen(buffer));
+            if ((size_t)bytes_written < strlen(buffer)) {
+                print_connection_closed();
+                exit(1);
+            }
             if (shutdown(sockfd, SHUT_WR) != 0) {
                 perror("shutdown()");
             }
@@ -170,9 +230,11 @@ void handle_request(int sockfd, verb command, char **args) {
             ssize_t real_size = strlen(buffer);
             if (bytes_written < real_size) {
                 LOG("!!!!!!write_to_socket failed");
+                free(buffer);
                 print_connection_closed();
                 exit(1);
             }
+            free(buffer);
 
             struct stat buf;
             if(stat(args[4], &buf) == -1) {
@@ -228,7 +290,7 @@ void handle_request(int sockfd, verb command, char **args) {
             }
         }
     }
-    free(buffer);
+    // free(buffer);
 }
 
 
