@@ -115,40 +115,33 @@ void read_from_server(char **args, int sockfd, verb command) {
                 read_from_socket(sockfd, (char *)&file_size, sizeof(size_t));
                 
                 size_t byte_write = 0;
-                while (byte_write < file_size + 5) {
+                while (byte_write < file_size + 1) {
                     ssize_t size_remain = 0;
-                    if ((file_size + 5 - byte_write) > BUFFER_SIZE) {
+                    if ((file_size + 1 - byte_write) > BUFFER_SIZE) {
                         size_remain = BUFFER_SIZE;
                     } else {
-                        size_remain = file_size + 5 - byte_write;
+                        size_remain = file_size + 1 - byte_write;
                     }
                     char buffer_temp[size_remain + 1];
                     memset(buffer_temp, 0, size_remain + 1);
-                    if (read_from_socket(sockfd, buffer_temp, size_remain) < size_remain) {
+                    size_t read_size = read_from_socket(sockfd, buffer_temp, size_remain);
+                    fwrite(buffer_temp, 1, size_remain, file);
+                    byte_write += size_remain;
+                     // error check
+                    if (read_size == 0) {
                         LOG("read_from_socket failed");
                         print_connection_closed();
                         exit(1);
+                    } else if (byte_write < file_size) {
+                        print_too_little_data();
+                        exit(1);
+                    } else if (byte_write > file_size) {
+                        print_received_too_much_data();
+                        exit(1);
+                    } else {
+                        // fprintf(stdout, "%zu%s", file_size, buffer_temp);
+                        fclose(file);
                     }
-                    fwrite(buffer_temp, 1, size_remain, file);
-                    byte_write += size_remain;
-                }
-                
-
-                // error check
-                if (byte_write == 0 && byte_write != file_size) {  
-                    // fprintf(stderr, "byte_read: %zu, file_size: %zu", byte_read, file_size);
-                    LOG("byte_read: %zu, file_size: %zu", byte_write, file_size);
-                    print_connection_closed();
-                    exit(1);
-                } else if (byte_write < file_size) {
-                    print_too_little_data();
-                    exit(1);
-                } else if (byte_write > file_size) {
-                    print_received_too_much_data();
-                    exit(1);
-                } else {
-                    // fprintf(stdout, "%zu%s", file_size, buffer_temp);
-                    fclose(file);
                 }
             }
         }
