@@ -85,9 +85,9 @@ void read_from_server(char **args, int sockfd, verb command) {
             if (command == LIST) {
                 size_t file_size;
                 read_from_socket(sockfd, (char *)&file_size, sizeof(size_t));
-                char buffer_temp[file_size+2];
-                memset(buffer_temp, 0, file_size+2);
-                byte_read = read_from_socket(sockfd, buffer_temp, file_size+1);
+                char buffer_temp[file_size + 2];
+                memset(buffer_temp, 0, file_size + 2);
+                byte_read = read_from_socket(sockfd, buffer_temp, file_size + 1);
                 // fprintf(stdout, "%zu%s", file_size, buffer_temp);
                 // error check
                 if (byte_read == 0 && byte_read != file_size) {  
@@ -96,7 +96,6 @@ void read_from_server(char **args, int sockfd, verb command) {
                     print_connection_closed();
                     exit(1);
                 } else if (byte_read < file_size) {
-
                     print_too_little_data();
                     exit(1);
                 } else if (byte_read > file_size) {
@@ -116,14 +115,15 @@ void read_from_server(char **args, int sockfd, verb command) {
                 read_from_socket(sockfd, (char *)&file_size, sizeof(size_t));
                 
                 size_t byte_write = 0;
-                while (byte_write < file_size) {
+                while (byte_write < file_size + 5) {
                     ssize_t size_remain = 0;
-                    if ((file_size - byte_write) > BUFFER_SIZE) {
+                    if ((file_size + 5 - byte_write) > BUFFER_SIZE) {
                         size_remain = BUFFER_SIZE;
                     } else {
-                        size_remain = file_size - byte_write;
+                        size_remain = file_size + 5 - byte_write;
                     }
                     char buffer_temp[size_remain + 1];
+                    memset(buffer_temp, 0, size_remain + 1);
                     if (read_from_socket(sockfd, buffer_temp, size_remain) < size_remain) {
                         LOG("read_from_socket failed");
                         print_connection_closed();
