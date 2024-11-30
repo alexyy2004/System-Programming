@@ -31,6 +31,21 @@ verb check_args(char **args);
 int connect_to_server(const char *host, const char *port);
 void handle_request(int sockfd, verb command, char **args);
 
+
+int print_any_err(size_t bytes_rd, size_t size) {
+  if (bytes_rd == 0 && bytes_rd != size) {
+    print_connection_closed();
+    return 1;
+  } else if (bytes_rd < size) {
+    print_too_little_data();
+    return 1;
+  } else if (bytes_rd > size) {
+    print_received_too_much_data();
+    return 1;
+  }
+  return 0;
+}
+
 /**
  * host - Server to connect to.
  * port - Port to connect to server on.
@@ -106,7 +121,7 @@ void read_from_server(char **args, int sockfd, verb command) {
                 }
             }
             if (command == GET) { //todo
-                FILE *file = fopen(args[4], "w");
+                FILE *file = fopen(args[4], "a+");
                 if (!file) {
                     perror("fopen");
                     exit(1);
@@ -115,33 +130,36 @@ void read_from_server(char **args, int sockfd, verb command) {
                 read_from_socket(sockfd, (char *)&file_size, sizeof(size_t));
                 
                 size_t byte_write = 0;
-                while (byte_write < file_size + 1) {
+                while (byte_write < file_size) {
                     ssize_t size_remain = 0;
-                    if ((file_size + 1 - byte_write) > BUFFER_SIZE) {
+                    if ((file_size - byte_write) > BUFFER_SIZE) {
                         size_remain = BUFFER_SIZE;
                     } else {
-                        size_remain = file_size + 1 - byte_write;
+                        size_remain = file_size - byte_write;
                     }
                     char buffer_temp[size_remain + 1];
                     memset(buffer_temp, 0, size_remain + 1);
                     size_t read_size = read_from_socket(sockfd, buffer_temp, size_remain);
-                    fwrite(buffer_temp, 1, size_remain, file);
-                    byte_write += size_remain;
-                     // error check
+                    fwrite(buffer_temp, 1, read_size, file);
+                    byte_write += read_size;
                     if (read_size == 0) {
-                        LOG("read_from_socket failed");
-                        print_connection_closed();
-                        exit(1);
-                    } else if (byte_write < file_size) {
-                        print_too_little_data();
-                        exit(1);
-                    } else if (byte_write > file_size) {
-                        print_received_too_much_data();
-                        exit(1);
-                    } else {
-                        // fprintf(stdout, "%zu%s", file_size, buffer_temp);
-                        fclose(file);
+                        break;
                     }
+                }
+                // error check
+                if (byte_write == 0 && byte_write != file_size) {
+                    LOG("read_from_socket failed");
+                    print_connection_closed();
+                    exit(1);
+                } else if (byte_write < file_size) {
+                    print_too_little_data();
+                    exit(1);
+                } else if (byte_write > file_size) {
+                    print_received_too_much_data();
+                    exit(1);
+                } else {
+                    // fprintf(stdout, "%zu%s", file_size, buffer_temp);
+                    fclose(file);
                 }
             }
         }
