@@ -227,6 +227,42 @@ int process_LIST(int client_fd, client_info *info) {
 }
 
 int process_GET(int client_fd, client_info *info) {
+    int filename_len = strlen(global_temp_dir) + 1 + strlen(info->filename) + 1; // `%s/%s`
+    char filepath[filename_len];
+    memset(filepath, 0, filename_len);
+    sprintf(filepath, "%s/%s", global_temp_dir, info->filename); // Populate the filepath
+
+    FILE* read_file = fopen(filepath, "r");
+    if (read_file == NULL) {
+        info->state = -3; // No such file error
+        return 1;
+    }
+
+    write_to_socket(client_fd, "OK\n", 3); 
+    if (strlen(info->filename) == 0) {
+        info->state = -1; 
+        return 1;
+    }
+
+    size_t size = *(size_t *)dictionary_get(global_file_size, info->filename);
+    write_to_socket(client_fd, (char *)&size, sizeof(size_t));
+
+    size_t bytes_write = 0;
+    while (bytes_write < size) {
+        size_t new_bytes_write = 0;
+        if (size - bytes_write > MAX_HEADER_LEN) {
+            new_bytes_write = MAX_HEADER_LEN;
+        } else {
+            new_bytes_write = size - bytes_write;
+        }
+        char buffer[MAX_HEADER_LEN + 1];
+        memset(buffer, 0, MAX_HEADER_LEN + 1);
+        fread(buffer, 1, new_bytes_write, read_file);
+        write_to_socket(client_fd, buffer, new_bytes_write);
+        bytes_write += new_bytes_write;
+    }
+
+    fclose(read_file);
     return 0;
 }
 
@@ -242,7 +278,9 @@ void clean_client(int client_fd) {
 
 void process_cmd(int client_fd, client_info *info) {
     if (info->command == PUT) {
+        LOG("process PUT");
         write_to_socket(client_fd, "OK\n", 3); // already checked in read_header
+        LOG("process PUT end");
     }
 
     if (info->command == GET) { //todo
@@ -448,7 +486,7 @@ int main(int argc, char **argv) {
     if (sigaction(SIGINT, &act, NULL) < 0)
     {
         perror("sigaction");
-        return 1;
+        exit(1);
     }
 
     char template[] = "XXXXXX";
