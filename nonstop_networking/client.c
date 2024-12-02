@@ -334,6 +334,7 @@ int main(int argc, char **argv) {
     int socketserver = connect_to_server(args[0], args[1]);
     handle_request(socketserver, request, args);
     shutdown(socketserver, SHUT_RD);
+    // LOG("result: %d", result);
     close(socketserver);
     free(args);
 

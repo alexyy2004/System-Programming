@@ -11,6 +11,7 @@
 #include "dictionary.h"
 #include "format.h"
 #include <arpa/inet.h>
+#include <sys/stat.h>
 #include <errno.h>
 #include <netdb.h>
 #include <fcntl.h>
@@ -18,6 +19,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/epoll.h>
+#include <dirent.h>
 
 #define MAX_CLIENTS 8
 #define MAX_EVENTS 100
@@ -51,7 +53,7 @@ void ignore_signal() {
 
 void initialize_global_variables() { //todo
     clients_dict = int_to_shallow_dictionary_create();
-    global_temp_dir = NULL;
+    // global_temp_dir = NULL;
     global_file_size = string_to_unsigned_long_dictionary_create();
     file_list = vector_create(string_copy_constructor, string_destructor, string_default_constructor);
 }
@@ -69,7 +71,6 @@ int read_from_client(int client_fd, client_info *info) {
     }
     size_t file_size;
     read_from_socket(client_fd, (char *)&file_size, sizeof(size_t));
-    
     size_t byte_write = 0;
     while (byte_write < file_size) {
         ssize_t size_remain = 0;
@@ -142,34 +143,42 @@ void read_header(int client_fd, client_info *info) {
         return;
     } else { // parse header success
         LOG("info->header: %s", info->header);
-        if (strcmp(info->header, "GET") == 0) {
+        // LOG("achieve here!!!!");
+        // LOG("strncmp(info->header, 3): %d ", strncmp(info->header, "PUT", 3));
+        if (info->state == -2) {
+            exit(1);
+        }
+        if (strncmp(info->header, "GET", 3) == 0) {
             info->command = GET;
             strcpy(info->filename, info->header + 4);
             info->filename[strlen(info->filename) - 1] = '\0';
             info->state = 1;
             struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
             epoll_ctl(gloabl_epfd, EPOLL_CTL_MOD, client_fd, &ev_out);
-        } else if (strcmp(info->header, "PUT") == 0) {
+        } else if (strncmp(info->header, "PUT", 3) == 0) {
+            // LOG("PUT");
             info->command = PUT;
             strcpy(info->filename, info->header + 4);
             info->filename[strlen(info->filename) - 1] = '\0';
+            // LOG("start read_from_client");
             if (read_from_client(client_fd, info)) { // bad file size
                 info->state = -2;
                 struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
                 epoll_ctl(gloabl_epfd, EPOLL_CTL_MOD, client_fd, &ev_out);
                 return;
             }
+            // LOG("PUT end");
             info->state = 1;
             struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
             epoll_ctl(gloabl_epfd, EPOLL_CTL_MOD, client_fd, &ev_out);
-        } else if (strcmp(info->header, "DELETE") == 0) { 
+        } else if (strncmp(info->header, "DELETE", 6) == 0) { 
             info->command = DELETE;
             strcpy(info->filename, info->header + 7);
             info->filename[strlen(info->filename) - 1] = '\0';
             info->state = 1;
             struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
             epoll_ctl(gloabl_epfd, EPOLL_CTL_MOD, client_fd, &ev_out);
-        } else if (strcmp(info->header, "LIST") == 0) {
+        } else if (strncmp(info->header, "LIST", 4) == 0) {
             info->command = LIST;
             info->state = 1;
             struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
@@ -308,17 +317,29 @@ void process_cmd(int client_fd, client_info *info) {
 }
 
 void error_handler(int client_fd, client_info *info) {
-
+    write_to_socket(client_fd, "ERROR\n", 6);
+	if (info->state == -1) {
+		write_to_socket(client_fd, err_bad_request, strlen(err_bad_request));
+	} else if (info->state == -2) {
+		write_to_socket(client_fd, err_bad_file_size, strlen(err_bad_file_size));
+	} else if (info->state == -3) {
+		write_to_socket(client_fd, err_no_such_file, strlen(err_no_such_file));
+	}
+	clean_client(client_fd);
 }
 
 void run_client(int client_fd) {
 	client_info *info = dictionary_get(clients_dict, &client_fd);
+    LOG("info->state: %d", info->state);
+    
 	if (info->state == 0) {
 		read_header(client_fd, info);
 	} else if (info->state == 1) {
 		process_cmd(client_fd, info);
 	} else {
+        LOG("run_client error_handler");
 		error_handler(client_fd, info);
+        LOG("run_client error_handler finish");
 	}
 
     // bool error = true;
@@ -334,23 +355,54 @@ void run_client(int client_fd) {
     // }
 }
 
+void delete_dir(char *path) {
+    struct dirent *entry;
+    DIR *dir = opendir(path);
 
-/**
- * Sets up a server connection.
- * Does not accept more than MAX_CLIENTS connections.  If more than MAX_CLIENTS
- * clients attempts to connects, simply shuts down
- * the new client and continues accepting.
- * Per client, a thread should be created and 'process_client' should handle
- * that client.
- * Makes use of 'endSession', 'clientsCount', 'client', and 'mutex'.
- *
- * port - port server will run on.
- *
- * If any networking call fails, the appropriate error is printed and the
- * function calls exit(1):
- *    - fprtinf to stderr for getaddrinfo
- *    - perror() for any other call
- */
+    if (dir == NULL) {
+        perror("Unable to open directory");
+        exit(1);
+    }
+
+    // Loop through directory entries
+    while ((entry = readdir(dir)) != NULL) {
+        // Skip the special entries "." and ".."
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        // Construct the full path of the entry
+        char full_path[PATH_MAX];
+        snprintf(full_path, sizeof(full_path), "%s/%s", path, entry->d_name);
+
+        // Check if entry is a directory
+        struct stat entry_stat;
+        if (stat(full_path, &entry_stat) == -1) {
+            perror("Error reading file stats");
+            closedir(dir);
+            exit(1);
+        }
+
+        if (S_ISDIR(entry_stat.st_mode)) {
+            // Entry is a directory; call delete_directory recursively
+            delete_dir(full_path);
+        } else {
+            // Entry is a file; remove it
+            if (remove(full_path) == -1) {
+                perror("Error deleting file");
+                closedir(dir);
+                exit(1);
+            }
+        }
+    }
+
+    closedir(dir);
+
+    // Remove the directory itself
+    rmdir(path);
+}
+
+// run_server from charming_chatroom lab, collaborate with pjame2, boyangl3
 void run_server(char *port) {
     /*QUESTION 1*/
     int s;
@@ -449,6 +501,8 @@ void run_server(char *port) {
                     close(client_fd);
                     exit(1);
                 }
+                client_info *info = calloc(1, sizeof(client_info));
+                dictionary_set(clients_dict, &client_fd, info);
             } else { // this is the client socket
                 run_client(fd);
             }
@@ -458,7 +512,8 @@ void run_server(char *port) {
 }
 
 void close_server(int sig) {
-    remove(global_temp_dir);
+    LOG("close_server");
+    delete_dir(global_temp_dir);
     vector *infos = dictionary_values(clients_dict);
     for (size_t i = 0; i < vector_size(infos); i++) {
         free(vector_get(infos, i));
@@ -470,6 +525,7 @@ void close_server(int sig) {
     vector_destroy(file_list);
     close(gloabl_epfd);
     exit(1);
+
 }
 
 int main(int argc, char **argv) {
@@ -496,3 +552,4 @@ int main(int argc, char **argv) {
     initialize_global_variables();
     run_server(argv[1]);
 }
+
