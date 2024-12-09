@@ -10,7 +10,7 @@ ssize_t read_from_socket(int sockfd, char *buffer, size_t length) {
         ssize_t bytes_read = read(sockfd, buffer + total_bytes_read, length - total_bytes_read);
         // LOG("bytes_read in common: %zd", bytes_read);
         if (bytes_read < 0) {
-            if (errno == EINTR) {
+            if (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN) {
                 // Interrupted by a signal, retry the read
                 continue;
             }
@@ -30,11 +30,12 @@ ssize_t read_from_socket(int sockfd, char *buffer, size_t length) {
     return total_bytes_read; // Return the total bytes read
 }
 
+
 ssize_t write_to_socket(int socket, const char *buffer, size_t count)
 {
     // Your Code Here
-    ssize_t total_write = 0;
-    while (total_write < (ssize_t)count)
+    size_t total_write = 0;
+    while (total_write < count)
     {
         ssize_t write_result = write(socket, buffer + total_write, count - total_write);
         if (write_result == 0)
@@ -47,7 +48,11 @@ ssize_t write_to_socket(int socket, const char *buffer, size_t count)
         }
         else if (write_result < 0)
         { // Failure, check if error was interrupted
-            if (errno != EINTR)
+            if (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN)
+            { // error was interrupted
+                continue;
+            }
+            else
             { // error was NOT interrupted
                 return -1;
             }

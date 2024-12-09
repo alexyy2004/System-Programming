@@ -70,7 +70,9 @@ int read_from_client(int client_fd, client_info *info) {
         exit(1);
     }
     size_t file_size;
+    LOG("read_from_client start");
     read_from_socket(client_fd, (char *)&file_size, sizeof(size_t));
+    LOG("read from client end");
     size_t byte_write = 0;
     while (byte_write < file_size) {
         ssize_t size_remain = 0;
@@ -129,6 +131,7 @@ void read_header(int client_fd, client_info *info) {
     size_t bytes_read = 0;
     while (bytes_read < MAX_HEADER_LEN) {
         ssize_t read_size = read(client_fd, info->header + bytes_read, 1);
+        LOG("read_size: %zd", read_size);
         if (read_size == -1) {
             if (errno == EINTR) {
                 continue;
@@ -142,7 +145,7 @@ void read_header(int client_fd, client_info *info) {
         bytes_read++;
     }
 
-
+    LOG("achieve here");
     if (bytes_read == MAX_HEADER_LEN) { // parse header failed
         info->state = -1;
         struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
@@ -167,14 +170,16 @@ void read_header(int client_fd, client_info *info) {
             info->command = PUT;
             strcpy(info->filename, info->header + 4);
             info->filename[strlen(info->filename) - 1] = '\0';
-            // LOG("start read_from_client");
+            LOG("PUT start read_from_client");
             if (read_from_client(client_fd, info)) { // bad file size
+                LOG("read_from_client failed");
                 info->state = -2;
                 struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
                 epoll_ctl(gloabl_epfd, EPOLL_CTL_MOD, client_fd, &ev_out);
                 return;
             }
             // LOG("PUT end");
+            LOG("PUT END HERE");
             info->state = 1;
             struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
             epoll_ctl(gloabl_epfd, EPOLL_CTL_MOD, client_fd, &ev_out);
@@ -255,10 +260,10 @@ int process_GET(int client_fd, client_info *info) {
     }
 
     write_to_socket(client_fd, "OK\n", 3); 
-    if (strlen(info->filename) == 0) {
-        info->state = -1; 
-        return 1;
-    }
+    // if (strlen(info->filename) == 0) {
+    //     info->state = -1; 
+    //     return 1;
+    // }
 
     size_t size = *(size_t *)dictionary_get(global_file_size, info->filename);
     write_to_socket(client_fd, (char *)&size, sizeof(size_t));
@@ -271,8 +276,8 @@ int process_GET(int client_fd, client_info *info) {
         } else {
             new_bytes_write = size - bytes_write;
         }
-        char buffer[MAX_HEADER_LEN + 1];
-        memset(buffer, 0, MAX_HEADER_LEN + 1);
+        char buffer[new_bytes_write + 1];
+        memset(buffer, 0, new_bytes_write + 1);
         fread(buffer, 1, new_bytes_write, read_file);
         write_to_socket(client_fd, buffer, new_bytes_write);
         bytes_write += new_bytes_write;
@@ -297,24 +302,18 @@ void process_cmd(int client_fd, client_info *info) {
         // LOG("process PUT");
         write_to_socket(client_fd, "OK\n", 3); // already checked in read_header
         // LOG("process PUT end");
-    }
-
-    if (info->command == GET) { //todo
+    } else if (info->command == GET) { //todo
         int result = process_GET(client_fd, info);
         if (result == 1) {
             return;
         }
-    }
- 
-    if (info->command == DELETE) { 
+    } else if (info->command == DELETE) { 
         int result = process_DELETE(client_fd, info);
         if (result == 1) { // delete failed
             return; // return to error_handler
         }
         write_to_socket(client_fd, "OK\n", 3);
-    }
-
-    if (info->command == LIST) {
+    } else if (info->command == LIST) {
         int result = process_LIST(client_fd, info);
         if (result == 1) {
             return;
@@ -340,17 +339,17 @@ void run_client(int client_fd) {
     // LOG("info->state: %d", info->state);
     
 	if (info->state == 0) {
-        // LOG("run_client read_header");
+        LOG("run_client read_header");
 		read_header(client_fd, info);
-        // LOG("run_client read_header finish");
+        LOG("run_client read_header finish");
 	} else if (info->state == 1) {
-        // LOG("run_client process_cmd");
+        LOG("run_client process_cmd");
 		process_cmd(client_fd, info);
-        // LOG("run_client process_cmd finish");
+        LOG("run_client process_cmd finish");
 	} else {
-        // LOG("run_client error_handler");
+        LOG("run_client error_handler");
 		error_handler(client_fd, info);
-        // LOG("run_client error_handler finish");
+        LOG("run_client error_handler finish");
 	}
 
     // bool error = true;
@@ -564,649 +563,3 @@ int main(int argc, char **argv) {
     run_server(argv[1]);
 }
 
-// /**
-//  * nonstop_networking - Updated Server
-//  * CS 341 - Fall 2024
-//  */
-// #include <stdio.h>
-// #include <signal.h>
-// #include <stdlib.h>
-// #include <string.h>
-// #include <unistd.h>
-// #include "common.h"
-// #include "dictionary.h"
-// #include "format.h"
-// #include <arpa/inet.h>
-// #include <sys/stat.h>
-// #include <errno.h>
-// #include <netdb.h>
-// #include <fcntl.h>
-// #include <sys/socket.h>
-// #include <sys/types.h>
-// #include <sys/epoll.h>
-// #include <dirent.h>
-
-// #define MAX_CLIENTS 8
-// #define MAX_EVENTS 100
-// #define MAX_HEADER_LEN 1024
-// #define MAX_FILENAME 256
-// #define BUFFER_SIZE 1024
-
-// static int gloabl_epfd;
-// static dictionary *clients_dict; 
-// static char *global_temp_dir;
-// static vector *file_list;
-// static dictionary *global_file_size;
-
-// typedef enum {
-//     STATE_READING_HEADER = 0,
-//     STATE_READING_FILE_SIZE,
-//     STATE_READING_FILE,
-//     STATE_WRITING_RESPONSE,
-//     STATE_ERROR
-// } client_state;
-
-// typedef struct client_info {
-//     client_state state;
-//     verb command;
-//     char filename[MAX_FILENAME];
-//     char header[MAX_HEADER_LEN];
-//     size_t header_bytes_read;
-
-//     size_t expected_file_size;
-//     size_t bytes_received;
-
-//     FILE *file; // for PUT writing
-//     char response_buffer[1024];
-//     size_t response_bytes_sent;
-//     size_t response_length;
-//     bool response_ready;
-// } client_info;
-
-// void ignore_signal(int sig) {
-//     (void)sig;
-//     // ignore SIGPIPE
-// }
-
-// void initialize_global_variables() {
-//     clients_dict = int_to_shallow_dictionary_create();
-//     global_file_size = string_to_unsigned_long_dictionary_create();
-//     file_list = vector_create(string_copy_constructor, string_destructor, string_default_constructor);
-// }
-
-// static void send_error_response(int client_fd, client_info *info, const char *err_message) {
-//     // Prepare error response
-//     char buf[1024];
-//     snprintf(buf, sizeof(buf), "ERROR\n%s", err_message);
-//     write_to_socket(client_fd, buf, strlen(buf));
-// }
-
-// void clean_client(int client_fd) {
-//     client_info *info = dictionary_get(clients_dict, &client_fd);
-//     if (info) {
-//         if (info->file) {
-//             fclose(info->file);
-//             info->file = NULL;
-//         }
-//         free(info);
-//     }
-//     epoll_ctl(gloabl_epfd, EPOLL_CTL_DEL, client_fd, NULL);
-//     dictionary_remove(clients_dict, &client_fd);
-//     shutdown(client_fd, SHUT_RDWR);
-//     close(client_fd);
-// }
-
-// // static void transition_to_writing_response(int client_fd, client_info *info) {
-// //     struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
-// //     epoll_ctl(gloabl_epfd, EPOLL_CTL_MOD, client_fd, &ev_out);
-// //     info->state = STATE_WRITING_RESPONSE;
-// //     info->response_bytes_sent = 0;
-// //     info->response_ready = true;
-// // }
-
-// // static void start_writing_ok(int client_fd, client_info *info) {
-// //     // Just "OK\n"
-// //     snprintf(info->response_buffer, sizeof(info->response_buffer), "OK\n");
-// //     info->response_length = strlen(info->response_buffer);
-// //     transition_to_writing_response(client_fd, info);
-// // }
-
-// static void handle_GET(int client_fd, client_info *info) {
-//     // Check if file exists
-//     int path_len = strlen(global_temp_dir) + 1 + (int)strlen(info->filename) + 1;
-//     char file_path[path_len];
-//     snprintf(file_path, path_len, "%s/%s", global_temp_dir, info->filename);
-
-//     struct stat st;
-//     if (stat(file_path, &st) != 0) {
-//         info->state = STATE_ERROR;
-//         send_error_response(client_fd, info, err_no_such_file);
-//         clean_client(client_fd);
-//         return;
-//     }
-
-//     FILE *f = fopen(file_path, "r");
-//     if (!f) {
-//         info->state = STATE_ERROR;
-//         send_error_response(client_fd, info, err_no_such_file);
-//         clean_client(client_fd);
-//         return;
-//     }
-
-//     size_t size = st.st_size;
-//     // Prepare full response in memory (not ideal for very large files, but simple):
-//     // For large files, you'd stream it in STATE_WRITING_RESPONSE increments.
-//     // But let's keep it simple.
-//     // Response: "OK\n" + size_t + file data
-//     char *buf = malloc(3 + sizeof(size_t) + size);
-//     if (!buf) {
-//         fclose(f);
-//         info->state = STATE_ERROR;
-//         send_error_response(client_fd, info, err_bad_request);
-//         clean_client(client_fd);
-//         return;
-//     }
-
-//     memcpy(buf, "OK\n", 3);
-//     memcpy(buf+3, &size, sizeof(size_t));
-//     size_t offset = 3 + sizeof(size_t);
-//     size_t r = fread(buf+offset, 1, size, f);
-//     fclose(f);
-//     if (r < size) {
-//         free(buf);
-//         info->state = STATE_ERROR;
-//         send_error_response(client_fd, info, err_bad_request);
-//         clean_client(client_fd);
-//         return;
-//     }
-
-//     // write all at once:
-//     ssize_t w = write_to_socket(client_fd, buf, 3 + sizeof(size_t) + size);
-//     free(buf);
-//     if (w < (ssize_t)(3 + sizeof(size_t) + size)) {
-//         // If partial write, you'd need to handle STATE_WRITING_RESPONSE incrementally.
-//         // For simplicity, assume it sends at once, or handle partial writes similarly.
-//         // Here, we just close.
-//     }
-//     clean_client(client_fd);
-// }
-
-// static void handle_DELETE(int client_fd, client_info *info) {
-//     int path_len = strlen(global_temp_dir) + 1 + (int)strlen(info->filename) + 1;
-//     char file_path[path_len];
-//     snprintf(file_path, path_len, "%s/%s", global_temp_dir, info->filename);
-//     if (remove(file_path) == -1) {
-//         info->state = STATE_ERROR;
-//         send_error_response(client_fd, info, err_no_such_file);
-//         clean_client(client_fd);
-//         return;
-//     }
-
-//     for (size_t i = 0; i < vector_size(file_list); i++) {
-//         if (strcmp(vector_get(file_list, i), info->filename) == 0) {
-//             vector_erase(file_list, i);
-//             break;
-//         }
-//     }
-//     dictionary_remove(global_file_size, info->filename);
-//     // Send OK\n
-//     write_to_socket(client_fd, "OK\n", 3);
-//     clean_client(client_fd);
-// }
-
-// static void handle_LIST(int client_fd, client_info *info) {
-//     // "OK\n", size_t, filenames
-//     size_t total = 0;
-//     for (size_t i = 0; i < vector_size(file_list); i++) {
-//         total += strlen(vector_get(file_list, i)) + 1;
-//     }
-//     if (total > 0) {
-//         total -= 1; // no newline after last file
-//     }
-
-//     ssize_t w = write_to_socket(client_fd, "OK\n", 3);
-//     if (w < 3) {
-//         clean_client(client_fd);
-//         return;
-//     }
-
-//     w = write_to_socket(client_fd, (char*)&total, sizeof(size_t));
-//     if (w < (ssize_t)sizeof(size_t)) {
-//         clean_client(client_fd);
-//         return;
-//     }
-
-//     for (size_t i = 0; i < vector_size(file_list); i++) {
-//         const char *fname = vector_get(file_list, i);
-//         w = write_to_socket(client_fd, fname, strlen(fname));
-//         if (w < (ssize_t)strlen(fname)) {
-//             clean_client(client_fd);
-//             return;
-//         }
-//         if (i < vector_size(file_list)-1) {
-//             w = write_to_socket(client_fd, "\n", 1);
-//             if (w < 1) {
-//                 clean_client(client_fd);
-//                 return;
-//             }
-//         }
-//     }
-//     clean_client(client_fd);
-// }
-
-// static void handle_PUT_done(int client_fd, client_info *info) {
-//     // Finished reading file
-//     fclose(info->file);
-//     info->file = NULL;
-
-//     // Add to file_list if not already there
-//     bool exists = false;
-//     for (size_t i = 0; i < vector_size(file_list); i++) {
-//         if (strcmp(vector_get(file_list, i), info->filename) == 0) {
-//             exists = true;
-//             break;
-//         }
-//     }
-//     if (!exists) {
-//         vector_push_back(file_list, info->filename);
-//     }
-//     dictionary_set(global_file_size, info->filename, &info->expected_file_size);
-
-//     // Now send "OK\n"
-//     write_to_socket(client_fd, "OK\n", 3);
-//     clean_client(client_fd);
-// }
-
-// static void handle_read_header(int client_fd, client_info *info) {
-//     // read until newline or MAX_HEADER_LEN
-//     char c;
-//     ssize_t r = read(client_fd, &c, 1);
-//     if (r == 0) {
-//         // client closed
-//         clean_client(client_fd);
-//         return;
-//     } else if (r < 0) {
-//         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-//             // no more data now
-//             return;
-//         }
-//         perror("read");
-//         clean_client(client_fd);
-//         return;
-//     }
-
-//     if (info->header_bytes_read < MAX_HEADER_LEN-1) {
-//         info->header[info->header_bytes_read++] = c;
-//         info->header[info->header_bytes_read] = '\0';
-//     } else {
-//         // header too long
-//         info->state = STATE_ERROR;
-//         send_error_response(client_fd, info, err_bad_request);
-//         clean_client(client_fd);
-//         return;
-//     }
-
-//     if (c == '\n') {
-//         // parse header
-//         char *line = info->header;
-//         // remove trailing newline
-//         line[strcspn(line, "\r\n")] = '\0';
-
-//         // parse verb
-//         char *verb = strtok(line, " ");
-//         char *fname = strtok(NULL, " ");
-//         if (!verb) {
-//             info->state = STATE_ERROR;
-//             send_error_response(client_fd, info, err_bad_request);
-//             clean_client(client_fd);
-//             return;
-//         }
-
-//         if (strcmp(verb, "LIST") == 0) {
-//             if (fname != NULL) {
-//                 info->state = STATE_ERROR;
-//                 send_error_response(client_fd, info, err_bad_request);
-//                 clean_client(client_fd);
-//                 return;
-//             }
-//             info->command = LIST;
-//             // Move directly to handle_LIST
-//             handle_LIST(client_fd, info);
-//         } else if (strcmp(verb, "GET") == 0) {
-//             if (!fname) {
-//                 info->state = STATE_ERROR;
-//                 send_error_response(client_fd, info, err_bad_request);
-//                 clean_client(client_fd);
-//                 return;
-//             }
-//             info->command = GET;
-//             strncpy(info->filename, fname, MAX_FILENAME-1);
-//             info->filename[MAX_FILENAME-1] = '\0';
-//             handle_GET(client_fd, info);
-//         } else if (strcmp(verb, "DELETE") == 0) {
-//             if (!fname) {
-//                 info->state = STATE_ERROR;
-//                 send_error_response(client_fd, info, err_bad_request);
-//                 clean_client(client_fd);
-//                 return;
-//             }
-//             info->command = DELETE;
-//             strncpy(info->filename, fname, MAX_FILENAME-1);
-//             info->filename[MAX_FILENAME-1] = '\0';
-//             handle_DELETE(client_fd, info);
-//         } else if (strcmp(verb, "PUT") == 0) {
-//             if (!fname) {
-//                 info->state = STATE_ERROR;
-//                 send_error_response(client_fd, info, err_bad_request);
-//                 clean_client(client_fd);
-//                 return;
-//             }
-//             info->command = PUT;
-//             strncpy(info->filename, fname, MAX_FILENAME-1);
-//             info->filename[MAX_FILENAME-1] = '\0';
-//             // now need to read file size next
-//             info->state = STATE_READING_FILE_SIZE;
-//         } else {
-//             info->state = STATE_ERROR;
-//             send_error_response(client_fd, info, err_bad_request);
-//             clean_client(client_fd);
-//         }
-//     }
-// }
-
-// static void handle_read_file_size(int client_fd, client_info *info) {
-//     // read 8 bytes for size_t
-//     size_t to_read = sizeof(size_t) - info->bytes_received;
-//     char *ptr = (char*)&info->expected_file_size + info->bytes_received;
-//     ssize_t r = read(client_fd, ptr, to_read);
-//     if (r == 0) {
-//         // connection closed
-//         info->state = STATE_ERROR;
-//         send_error_response(client_fd, info, err_bad_file_size);
-//         clean_client(client_fd);
-//         return;
-//     } else if (r < 0) {
-//         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-//             return; // wait for more data
-//         }
-//         perror("read");
-//         info->state = STATE_ERROR;
-//         send_error_response(client_fd, info, err_bad_request);
-//         clean_client(client_fd);
-//         return;
-//     }
-
-//     info->bytes_received += r;
-//     if (info->bytes_received == sizeof(size_t)) {
-//         // got the file size
-//         // open file for writing
-//         int path_len = strlen(global_temp_dir) + 1 + (int)strlen(info->filename) + 1;
-//         char file_path[path_len];
-//         snprintf(file_path, path_len, "%s/%s", global_temp_dir, info->filename);
-//         info->file = fopen(file_path, "w");
-//         if (!info->file) {
-//             info->state = STATE_ERROR;
-//             send_error_response(client_fd, info, err_bad_request);
-//             clean_client(client_fd);
-//             return;
-//         }
-//         info->bytes_received = 0; // reset for reading file data
-//         info->state = STATE_READING_FILE;
-//     }
-// }
-
-// static void handle_read_file_data(int client_fd, client_info *info) {
-//     size_t remain = info->expected_file_size - info->bytes_received;
-//     if (remain == 0) {
-//         // done reading file
-//         handle_PUT_done(client_fd, info);
-//         return;
-//     }
-//     char buf[BUFFER_SIZE];
-//     size_t to_read = remain < BUFFER_SIZE ? remain : BUFFER_SIZE;
-
-//     ssize_t r = read(client_fd, buf, to_read);
-//     if (r == 0) {
-//         // connection closed, not enough data
-//         info->state = STATE_ERROR;
-//         send_error_response(client_fd, info, err_bad_file_size);
-//         remove(info->filename); // remove partial file
-//         clean_client(client_fd);
-//         return;
-//     } else if (r < 0) {
-//         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-//             return; // wait for more data
-//         }
-//         perror("read");
-//         info->state = STATE_ERROR;
-//         send_error_response(client_fd, info, err_bad_request);
-//         remove(info->filename);
-//         clean_client(client_fd);
-//         return;
-//     }
-
-//     size_t written = fwrite(buf, 1, r, info->file);
-//     if (written < (size_t)r) {
-//         info->state = STATE_ERROR;
-//         send_error_response(client_fd, info, err_bad_request);
-//         remove(info->filename);
-//         clean_client(client_fd);
-//         return;
-//     }
-
-//     info->bytes_received += r;
-
-//     if (info->bytes_received == info->expected_file_size) {
-//         // done reading file
-//         handle_PUT_done(client_fd, info);
-//     }
-// }
-
-// void run_client(int client_fd, uint32_t events) {
-//     client_info *info = dictionary_get(clients_dict, &client_fd);
-//     if (!info) return; // just in case
-
-//     if (events & EPOLLIN) {
-//         // handle read states
-//         if (info->state == STATE_READING_HEADER) {
-//             handle_read_header(client_fd, info);
-//         } else if (info->state == STATE_READING_FILE_SIZE) {
-//             handle_read_file_size(client_fd, info);
-//         } else if (info->state == STATE_READING_FILE) {
-//             handle_read_file_data(client_fd, info);
-//         }
-//     }
-
-//     if (events & EPOLLOUT) {
-//         // Handle writing response if you had partial writes (for large responses)
-//         // In this simplified version, we mostly write small responses at once.
-//         // If partial writes are needed, handle them here.
-//         if (info->state == STATE_WRITING_RESPONSE && info->response_ready) {
-//             ssize_t w = write(client_fd, info->response_buffer + info->response_bytes_sent,
-//                                info->response_length - info->response_bytes_sent);
-//             if (w > 0) {
-//                 info->response_bytes_sent += w;
-//                 if (info->response_bytes_sent == info->response_length) {
-//                     // done writing response
-//                     clean_client(client_fd);
-//                 }
-//             } else if (w < 0) {
-//                 if (errno != EAGAIN && errno != EWOULDBLOCK) {
-//                     perror("write");
-//                     clean_client(client_fd);
-//                 }
-//             }
-//         }
-//     }
-// }
-
-// void delete_dir(char *path) {
-//     struct dirent *entry;
-//     DIR *dir = opendir(path);
-
-//     if (dir == NULL) {
-//         perror("Unable to open directory");
-//         exit(1);
-//     }
-
-//     while ((entry = readdir(dir)) != NULL) {
-//         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-//             continue;
-//         }
-//         char full_path[PATH_MAX];
-//         snprintf(full_path, sizeof(full_path), "%s/%s", path, entry->d_name);
-
-//         struct stat entry_stat;
-//         if (stat(full_path, &entry_stat) == -1) {
-//             perror("Error reading file stats");
-//             closedir(dir);
-//             exit(1);
-//         }
-
-//         if (S_ISDIR(entry_stat.st_mode)) {
-//             delete_dir(full_path);
-//         } else {
-//             if (remove(full_path) == -1) {
-//                 perror("Error deleting file");
-//                 closedir(dir);
-//                 exit(1);
-//             }
-//         }
-//     }
-
-//     closedir(dir);
-//     rmdir(path);
-// }
-
-// void run_server(char *port) {
-//     int s;
-//     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
-//     if (sock_fd == -1) {
-//         perror("socket_failed");
-//         exit(1);
-//     }
-
-//     int reuse = 1;
-//     if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int)) < 0) {
-//         perror("setsockopt SO_REUSEADDR failed");
-//         close(sock_fd);
-//         exit(1);
-//     }
-//     if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(int)) < 0) {
-//         perror("setsockopt SO_REUSEPORT failed");
-//         close(sock_fd);
-//         exit(1);
-//     }
-
-//     struct addrinfo hints;
-//     struct addrinfo *res = NULL;
-//     memset(&hints, 0, sizeof(struct addrinfo));
-//     hints.ai_family = AF_INET;
-//     hints.ai_socktype = SOCK_STREAM;
-//     hints.ai_flags = AI_PASSIVE;
-//     s = getaddrinfo(NULL, port, &hints, &res);
-//     if (s != 0) {
-//         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
-//         exit(1);
-//     }
-
-//     if (bind(sock_fd, res->ai_addr, res->ai_addrlen) != 0) {
-//         perror(NULL);
-//         close(sock_fd);
-//         exit(1);
-//     }
-
-//     if (listen(sock_fd, MAX_CLIENTS) != 0) {
-//         perror(NULL);
-//         close(sock_fd);
-//         exit(1);
-//     }
-//     freeaddrinfo(res);
-
-//     gloabl_epfd = epoll_create(1);
-//     if (gloabl_epfd == -1) {
-//         perror("epoll_create failed");
-//         exit(1);
-//     }
-//     struct epoll_event ev1 = {.events = EPOLLIN, .data.fd = sock_fd};
-//     if (epoll_ctl(gloabl_epfd, EPOLL_CTL_ADD, sock_fd, &ev1) == -1) {
-//         perror("epoll_ctl: sock_fd failed");
-//         exit(1);
-//     }
-
-//     while (1) {
-//         struct epoll_event array[MAX_EVENTS];
-//         int num_events = epoll_wait(gloabl_epfd , array, MAX_EVENTS, -1);
-//         if (num_events == -1) {
-//             if (errno == EINTR) continue; 
-//             perror("epoll_wait failed");
-//             exit(1);
-//         }
-//         for (int i = 0; i < num_events; i++) {
-//             int fd = array[i].data.fd;
-//             uint32_t events = array[i].events;
-//             if (fd == sock_fd) { // new connection
-//                 int client_fd = accept(sock_fd, NULL, NULL);
-//                 if (client_fd == -1) {
-//                     perror("accept failed");
-//                     continue;
-//                 }
-//                 int flags = fcntl(client_fd, F_GETFL, 0);
-//                 if (flags == -1) perror("fcntl F_GETFL failed");
-//                 flags |= O_NONBLOCK;
-//                 if (fcntl(client_fd, F_SETFL, flags) == -1) perror("fcntl F_SETFL failed");
-
-//                 struct epoll_event ev_client = {.events = EPOLLIN, .data.fd = client_fd};
-//                 if (epoll_ctl(gloabl_epfd, EPOLL_CTL_ADD, client_fd, &ev_client) == -1) {
-//                     perror("epoll_ctl: client_fd failed");
-//                     close(client_fd);
-//                     continue;
-//                 }
-//                 client_info *info = calloc(1, sizeof(client_info));
-//                 info->state = STATE_READING_HEADER;
-//                 dictionary_set(clients_dict, &client_fd, info);
-//             } else {
-//                 run_client(fd, events);
-//             }
-//         }
-//     }
-// }
-
-// void close_server(int sig) {
-//     (void)sig;
-//     delete_dir(global_temp_dir);
-//     vector *infos = dictionary_values(clients_dict);
-//     for (size_t i = 0; i < vector_size(infos); i++) {
-//         free(vector_get(infos, i));
-//     }
-//     vector_destroy(infos);
-//     dictionary_destroy(clients_dict);
-
-//     dictionary_destroy(global_file_size);
-//     vector_destroy(file_list);
-//     close(gloabl_epfd);
-//     exit(0);
-// }
-
-// int main(int argc, char **argv) {
-//     signal(SIGPIPE, ignore_signal);
-//     if (argc != 2) {
-//         print_server_usage();
-//         exit(1);
-//     }
-
-//     struct sigaction act;
-//     memset(&act, '\0', sizeof(act));
-//     act.sa_handler = close_server;
-//     if (sigaction(SIGINT, &act, NULL) < 0) {
-//         perror("sigaction");
-//         exit(1);
-//     }
-
-//     char template[] = "XXXXXX";
-//     global_temp_dir = mkdtemp(template); 
-//     print_temp_directory(global_temp_dir);
-
-//     initialize_global_variables();
-//     run_server(argv[1]);
-// }
