@@ -99,15 +99,18 @@ int read_from_client(int client_fd, client_info *info) {
         // LOG("connection closed")
         // LOG("byte_write: %zu, file_size: %zu", byte_write, file_size);
         // LOG("read_from_socket failed");
-        print_connection_closed();
+        // print_connection_closed();
+        info->state = -2;
         flag = true;
     } else if (byte_write < file_size) {
-        print_too_little_data();
+        // print_too_little_data();
+        info->state = -2;
         flag = true;
     } else if (byte_write > file_size) {
         // LOG("too much data here")
         // LOG("byte_write: %zu, file_size: %zu", byte_write, file_size);
-        print_received_too_much_data();
+        // print_received_too_much_data();
+        info->state = -2;
         flag = true;
     } else {
         // fprintf(stdout, "%zu%s", file_size, buffer_temp);
@@ -133,7 +136,7 @@ void read_header(int client_fd, client_info *info) {
         ssize_t read_size = read(client_fd, info->header + bytes_read, 1);
         LOG("read_size: %zd", read_size);
         if (read_size == -1) {
-            if (errno == EINTR) {
+            if (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN) {
                 continue;
             }
             perror("read_header failed");
@@ -166,7 +169,9 @@ void read_header(int client_fd, client_info *info) {
             struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
             epoll_ctl(gloabl_epfd, EPOLL_CTL_MOD, client_fd, &ev_out);
         } else if (strncmp(info->header, "PUT", 3) == 0) {
-            // LOG("PUT");
+            LOG("PUT");
+            LOG("info->header: %s", info->header);
+            LOG("client_fd: %d", client_fd);
             info->command = PUT;
             strcpy(info->filename, info->header + 4);
             info->filename[strlen(info->filename) - 1] = '\0';
@@ -196,7 +201,7 @@ void read_header(int client_fd, client_info *info) {
             struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
             epoll_ctl(gloabl_epfd, EPOLL_CTL_MOD, client_fd, &ev_out);
         } else { // invalid response
-            print_invalid_response();
+            // print_invalid_response();
             info->state = -1;
             struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
             epoll_ctl(gloabl_epfd, EPOLL_CTL_MOD, client_fd, &ev_out);
