@@ -8,7 +8,7 @@ ssize_t read_from_socket(int sockfd, char *buffer, size_t length) {
     size_t total_bytes_read = 0; // Tracks the total bytes read
     while (total_bytes_read < length) {
         ssize_t bytes_read = read(sockfd, buffer + total_bytes_read, length - total_bytes_read);
-
+        // LOG("bytes_read in common: %zd", bytes_read);
         if (bytes_read < 0) {
             if (errno == EINTR) {
                 // Interrupted by a signal, retry the read
@@ -22,8 +22,9 @@ ssize_t read_from_socket(int sockfd, char *buffer, size_t length) {
             // Connection closed by the peer
             break;
         }
-
+        // LOG("first_total_bytes_read in common: %zd", total_bytes_read);
         total_bytes_read += bytes_read;
+        // LOG("then_total_bytes_read in common: %zu", total_bytes_read);
     }
 
     return total_bytes_read; // Return the total bytes read

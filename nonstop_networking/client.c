@@ -151,7 +151,7 @@ void read_from_server(char **args, int sockfd, verb command) {
                 }
                 // error check
                 if (byte_write == 0 && byte_write != file_size) {
-                    LOG("read_from_socket failed");
+                    // LOG("read_from_socket failed");
                     print_connection_closed();
                     exit(1);
                 } else if (byte_write < file_size) {
@@ -259,7 +259,7 @@ void handle_request(int sockfd, verb command, char **args) {
             ssize_t bytes_written = write_to_socket(sockfd, buffer, strlen(buffer));
             ssize_t real_size = strlen(buffer);
             if (bytes_written < real_size) {
-                LOG("!!!!!!write_to_socket failed");
+                // LOG("!!!!!!write_to_socket failed");
                 free(buffer);
                 print_connection_closed();
                 exit(1);
@@ -289,7 +289,7 @@ void handle_request(int sockfd, verb command, char **args) {
                 char buffer[size_remain + 1];
                 fread(buffer, 1, size_remain, file);
                 if (write_to_socket(sockfd, buffer, size_remain) < size_remain) {
-                    LOG("write_to_socket failed");
+                    // LOG("write_to_socket failed");
                     print_connection_closed();
                     exit(1);
                 }
@@ -427,3 +427,347 @@ verb check_args(char **args) {
     print_client_help();
     exit(1);
 }
+
+// /**
+//  * nonstop_networking - Updated Client
+//  * CS 341 - Fall 2024
+//  */
+// #include "format.h"
+// #include <ctype.h>
+// #include <stdbool.h>
+// #include <stdio.h>
+// #include <stdlib.h>
+// #include <string.h>
+// #include <unistd.h>
+// #include <sys/types.h>
+// #include <sys/socket.h>
+// #include <netinet/in.h>
+// #include <arpa/inet.h>
+// #include <unistd.h>
+// #include <netdb.h>
+// #include <errno.h>
+// #include <fcntl.h>
+// #include <sys/stat.h>
+
+// #include "common.h"
+
+// #define BUFFER_SIZE 1024
+// #define MAX_HEADER 1024
+// #define MAX_FILENAME 255
+
+// char **parse_args(int argc, char **argv);
+// verb check_args(char **args);
+// int connect_to_server(const char *host, const char *port);
+// void handle_request(int sockfd, verb command, char **args);
+
+// int connect_to_server(const char *host, const char *port) {
+//     struct addrinfo hints, *res;
+//     int status;
+//     memset(&hints, 0, sizeof hints);
+//     hints.ai_family = AF_INET;        
+//     hints.ai_socktype = SOCK_STREAM;  
+
+//     status = getaddrinfo(host, port, &hints, &res);
+//     if (status != 0) {
+//         fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+//         exit(1);
+//     }
+
+//     int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+//     if (sockfd == -1) {
+//         perror("socket");
+//         freeaddrinfo(res);
+//         exit(1);
+//     }
+
+//     if (connect(sockfd, res->ai_addr, res->ai_addrlen) == -1) {
+//         perror("connect");
+//         freeaddrinfo(res);
+//         exit(1);
+//     }
+
+//     freeaddrinfo(res);
+//     return sockfd;
+// }
+
+// static void safe_read_exact(int sockfd, char* buf, size_t length) {
+//     size_t read_bytes = 0;
+//     while (read_bytes < length) {
+//         ssize_t r = read_from_socket(sockfd, buf + read_bytes, length - read_bytes);
+//         if (r == 0) {
+//             print_connection_closed();
+//             exit(1);
+//         }
+//         if (r < 0) {
+//             perror("read_from_socket");
+//             exit(1);
+//         }
+//         read_bytes += r;
+//     }
+// }
+
+// static void read_response_error(int sockfd) {
+//     // We got "ERROR\n", now read one line of error message
+//     char errbuf[1024];
+//     memset(errbuf, 0, sizeof(errbuf));
+//     size_t pos = 0;
+//     while (pos < sizeof(errbuf) - 1) {
+//         ssize_t r = read_from_socket(sockfd, errbuf + pos, 1);
+//         if (r == 0) {
+//             // connection closed in the middle of error message
+//             print_connection_closed();
+//             exit(1);
+//         }
+//         if (r < 0) {
+//             perror("read_from_socket");
+//             exit(1);
+//         }
+//         pos += r;
+//         if (errbuf[pos-1] == '\n') {
+//             break;
+//         }
+//     }
+//     print_error_message(errbuf);
+// }
+
+// static void read_from_server(char **args, int sockfd, verb command) {
+//     // First line: either OK or ERROR
+//     char line[10];
+//     memset(line, 0, sizeof(line));
+//     // read line until \n:
+//     size_t pos = 0;
+//     while (pos < sizeof(line)-1) {
+//         ssize_t r = read_from_socket(sockfd, line+pos, 1);
+//         if (r == 0) {
+//             print_connection_closed();
+//             exit(1);
+//         }
+//         if (r < 0) {
+//             perror("read");
+//             exit(1);
+//         }
+//         pos += r;
+//         if (line[pos-1] == '\n') break;
+//     }
+
+//     if (strncmp(line, "OK", 2) == 0) {
+//         // No error
+//         if (command == DELETE || command == PUT) {
+//             // Just a success message
+//             // According to the spec: print_success (?)
+//             // The spec says print error messages only for error,
+//             // success doesn't specify extra prints except for error scenario.
+//             // So do nothing or print success (depends on assignment guidelines)
+//             // We'll trust `print_success()` if needed:
+//             // print_success();
+//         } else if (command == LIST) {
+//             // Next: read size_t and that many bytes
+//             size_t file_size;
+//             safe_read_exact(sockfd, (char*)&file_size, sizeof(size_t));
+//             char *buf = malloc(file_size+1);
+//             if (!buf) {
+//                 perror("malloc");
+//                 exit(1);
+//             }
+//             if (file_size > 0) {
+//                 safe_read_exact(sockfd, buf, file_size);
+//             }
+//             buf[file_size] = '\0';
+//             // print the file list:
+//             fprintf(stdout, "%s", buf);
+//             free(buf);
+//         } else if (command == GET) {
+//             // read file size
+//             size_t file_size;
+//             safe_read_exact(sockfd, (char*)&file_size, sizeof(size_t));
+//             // write to local file:
+//             FILE* f = fopen(args[4], "w");
+//             if (!f) {
+//                 perror("fopen");
+//                 exit(1);
+//             }
+//             size_t remain = file_size;
+//             char buf[BUFFER_SIZE];
+//             while (remain > 0) {
+//                 size_t to_read = remain < BUFFER_SIZE ? remain : BUFFER_SIZE;
+//                 ssize_t r = read_from_socket(sockfd, buf, to_read);
+//                 if (r == 0) {
+//                     print_connection_closed();
+//                     exit(1);
+//                 }
+//                 if (r < 0) {
+//                     perror("read_from_socket");
+//                     exit(1);
+//                 }
+//                 fwrite(buf, 1, r, f);
+//                 remain -= r;
+//             }
+//             fclose(f);
+//         }
+//     } else if (strncmp(line, "ERROR", 5) == 0) {
+//         read_response_error(sockfd);
+//     } else {
+//         // invalid response
+//         print_invalid_response();
+//     }
+// }
+
+// void handle_request(int sockfd, verb command, char **args) {
+//     if (command == LIST) {
+//         char buffer[6];
+//         snprintf(buffer, sizeof(buffer), "LIST\n");
+//         if (write_to_socket(sockfd, buffer, strlen(buffer)) < (ssize_t)strlen(buffer)) {
+//             print_connection_closed();
+//             exit(1);
+//         }
+//         shutdown(sockfd, SHUT_WR);
+//         read_from_server(args, sockfd, command);
+//     } else if (command == GET) {
+//         char buffer[MAX_HEADER];
+//         snprintf(buffer, MAX_HEADER, "GET %s\n", args[3]);
+//         if (write_to_socket(sockfd, buffer, strlen(buffer)) < (ssize_t)strlen(buffer)) {
+//             print_connection_closed();
+//             exit(1);
+//         }
+//         shutdown(sockfd, SHUT_WR);
+//         read_from_server(args, sockfd, command);
+//     } else if (command == DELETE) {
+//         char buffer[MAX_HEADER];
+//         snprintf(buffer, MAX_HEADER, "DELETE %s\n", args[3]);
+//         if (write_to_socket(sockfd, buffer, strlen(buffer)) < (ssize_t)strlen(buffer)) {
+//             print_connection_closed();
+//             exit(1);
+//         }
+//         shutdown(sockfd, SHUT_WR);
+//         read_from_server(args, sockfd, command);
+//     } else if (command == PUT) {
+//         // send "PUT filename\n"
+//         char buffer[MAX_HEADER];
+//         snprintf(buffer, MAX_HEADER, "PUT %s\n", args[3]);
+//         if (write_to_socket(sockfd, buffer, strlen(buffer)) < (ssize_t)strlen(buffer)) {
+//             print_connection_closed();
+//             exit(1);
+//         }
+
+//         struct stat st;
+//         if (stat(args[4], &st) < 0) {
+//             // local file doesn't exist
+//             print_connection_closed();
+//             exit(1);
+//         }
+
+//         size_t size = st.st_size;
+//         if (write_to_socket(sockfd, (char*)&size, sizeof(size_t)) < (ssize_t)sizeof(size_t)) {
+//             print_connection_closed();
+//             exit(1);
+//         }
+
+//         FILE* f = fopen(args[4], "r");
+//         if (!f) {
+//             perror("fopen");
+//             exit(1);
+//         }
+
+//         char buf[BUFFER_SIZE];
+//         size_t remain = size;
+//         while (remain > 0) {
+//             size_t to_read = remain < BUFFER_SIZE ? remain : BUFFER_SIZE;
+//             size_t r = fread(buf, 1, to_read, f);
+//             if (r < to_read && ferror(f)) {
+//                 perror("fread");
+//                 fclose(f);
+//                 exit(1);
+//             }
+//             if (write_to_socket(sockfd, buf, r) < (ssize_t)r) {
+//                 print_connection_closed();
+//                 fclose(f);
+//                 exit(1);
+//             }
+//             remain -= r;
+//         }
+//         fclose(f);
+//         shutdown(sockfd, SHUT_WR);
+//         read_from_server(args, sockfd, command);
+//     }
+// }
+
+// int main(int argc, char **argv) {
+//     char **args = parse_args(argc, argv);
+//     verb request = check_args(args);
+
+//     int socketserver = connect_to_server(args[0], args[1]);
+//     handle_request(socketserver, request, args);
+//     shutdown(socketserver, SHUT_RD);
+//     close(socketserver);
+//     free(args);
+// }
+
+// char **parse_args(int argc, char **argv) {
+//     if (argc < 3) {
+//         return NULL;
+//     }
+
+//     char *host = strtok(argv[1], ":");
+//     char *port = strtok(NULL, ":");
+//     if (port == NULL) {
+//         return NULL;
+//     }
+
+//     char **args = calloc(1, 6 * sizeof(char *));
+//     args[0] = host;
+//     args[1] = port;
+//     args[2] = argv[2];
+//     char *temp = args[2];
+//     while (*temp) {
+//         *temp = toupper((unsigned char)*temp);
+//         temp++;
+//     }
+//     if (argc > 3) {
+//         args[3] = argv[3];
+//     }
+//     if (argc > 4) {
+//         args[4] = argv[4];
+//     }
+
+//     return args;
+// }
+
+// verb check_args(char **args) {
+//     if (args == NULL) {
+//         print_client_usage();
+//         exit(1);
+//     }
+
+//     char *command = args[2];
+
+//     if (strcmp(command, "LIST") == 0) {
+//         return LIST;
+//     }
+
+//     if (strcmp(command, "GET") == 0) {
+//         if (args[3] != NULL && args[4] != NULL) {
+//             return GET;
+//         }
+//         print_client_help();
+//         exit(1);
+//     }
+
+//     if (strcmp(command, "DELETE") == 0) {
+//         if (args[3] != NULL) {
+//             return DELETE;
+//         }
+//         print_client_help();
+//         exit(1);
+//     }
+
+//     if (strcmp(command, "PUT") == 0) {
+//         if (args[3] == NULL || args[4] == NULL) {
+//             print_client_help();
+//             exit(1);
+//         }
+//         return PUT;
+//     }
+
+//     print_client_help();
+//     exit(1);
+// }
