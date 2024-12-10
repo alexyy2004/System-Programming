@@ -70,9 +70,9 @@ int read_from_client(int client_fd, client_info *info) {
         exit(1);
     }
     size_t file_size;
-    LOG("read_from_client start");
+    // LOG("read_from_client start");
     read_from_socket(client_fd, (char *)&file_size, sizeof(size_t));
-    LOG("read from client end");
+    // LOG("read from client end");
     size_t byte_write = 0;
     while (byte_write < file_size) {
         ssize_t size_remain = 0;
@@ -134,7 +134,7 @@ void read_header(int client_fd, client_info *info) {
     size_t bytes_read = 0;
     while (bytes_read < MAX_HEADER_LEN) {
         ssize_t read_size = read(client_fd, info->header + bytes_read, 1);
-        LOG("read_size: %zd", read_size);
+        // LOG("read_size: %zd", read_size);
         if (read_size == -1) {
             if (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN) {
                 continue;
@@ -148,7 +148,7 @@ void read_header(int client_fd, client_info *info) {
         bytes_read++;
     }
 
-    LOG("achieve here");
+    // LOG("achieve here");
     if (bytes_read == MAX_HEADER_LEN) { // parse header failed
         info->state = -1;
         struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
@@ -169,22 +169,22 @@ void read_header(int client_fd, client_info *info) {
             struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
             epoll_ctl(gloabl_epfd, EPOLL_CTL_MOD, client_fd, &ev_out);
         } else if (strncmp(info->header, "PUT", 3) == 0) {
-            LOG("PUT");
-            LOG("info->header: %s", info->header);
-            LOG("client_fd: %d", client_fd);
+            // LOG("PUT");
+            // LOG("info->header: %s", info->header);
+            // LOG("client_fd: %d", client_fd);
             info->command = PUT;
             strcpy(info->filename, info->header + 4);
             info->filename[strlen(info->filename) - 1] = '\0';
-            LOG("PUT start read_from_client");
+            // LOG("PUT start read_from_client");
             if (read_from_client(client_fd, info)) { // bad file size
-                LOG("read_from_client failed");
+                // LOG("read_from_client failed");
                 info->state = -2;
                 struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
                 epoll_ctl(gloabl_epfd, EPOLL_CTL_MOD, client_fd, &ev_out);
                 return;
             }
             // LOG("PUT end");
-            LOG("PUT END HERE");
+            // LOG("PUT END HERE");
             info->state = 1;
             struct epoll_event ev_out = {.data.fd = client_fd, .events = EPOLLOUT};
             epoll_ctl(gloabl_epfd, EPOLL_CTL_MOD, client_fd, &ev_out);
@@ -344,17 +344,17 @@ void run_client(int client_fd) {
     // LOG("info->state: %d", info->state);
     
 	if (info->state == 0) {
-        LOG("run_client read_header");
+        // LOG("run_client read_header");
 		read_header(client_fd, info);
-        LOG("run_client read_header finish");
+        // LOG("run_client read_header finish");
 	} else if (info->state == 1) {
-        LOG("run_client process_cmd");
+        // LOG("run_client process_cmd");
 		process_cmd(client_fd, info);
-        LOG("run_client process_cmd finish");
+        // LOG("run_client process_cmd finish");
 	} else {
-        LOG("run_client error_handler");
+        // LOG("run_client error_handler");
 		error_handler(client_fd, info);
-        LOG("run_client error_handler finish");
+        // LOG("run_client error_handler finish");
 	}
 
     // bool error = true;
