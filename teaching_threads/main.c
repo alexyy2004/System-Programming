@@ -81,6 +81,7 @@ int main(int argc, char *argv[]) {
 
     int ret_value =
         par_reduce(list_copy, list_len, reducer_func, base_case, num_threads);
+    printf("ret_value: %d\n", ret_value);  
 
     clock_gettime(CLOCK_MONOTONIC, &end);
     double diff =

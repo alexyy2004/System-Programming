@@ -15,6 +15,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Memory failed to allocate!\n");
         return 1;
     }
+    printf("finish the first malloc\n");
 
     for (i = 0; i < TOTAL_ALLOCS; i++) {
         arr[i] = malloc(sizeof(int));
@@ -25,6 +26,7 @@ int main(int argc, char *argv[]) {
 
         *(arr[i]) = i;
     }
+    printf("finish the first for loop\n");
 
     for (i = 0; i < TOTAL_ALLOCS; i++) {
         if (*(arr[i]) != i) {
@@ -33,9 +35,11 @@ int main(int argc, char *argv[]) {
             return 2;
         }
     }
+    printf("finish the second for loop\n");
 
     for (i = 0; i < TOTAL_ALLOCS; i++)
         free(arr[i]);
+    printf("finish the free for loop\n");
 
     free(arr);
     fprintf(stderr, "Memory was allocated, used, and freed!\n");

@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "format.h": "c",
+        "pthread.h": "c",
+        "array": "c",
+        "string_view": "c",
+        "initializer_list": "c",
+        "utility": "c",
+        "tree.h": "c"
+    }
+}

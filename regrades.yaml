@@ -10,7 +10,7 @@ assignments:
   critical_concurrency: false
   deadlock_demolition: false
   extreme_edge_cases: false
-  finding_filesystems: false
+  finding_filesystems: true
   ideal_indirection: false
   luscious_locks: false
   mad_mad_access_patterns: false

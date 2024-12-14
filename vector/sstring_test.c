@@ -12,7 +12,8 @@ int main(int argc, char *argv[]) {
     // free(cstr);
     // sstring_destroy(str);
 
-    vector *vec = sstring_split(cstr_to_sstring("abcdeefg"), 'e');
+    // vector *vec = sstring_split(cstr_to_sstring("abcdeefg"), 'e');
+    vector *vec = sstring_split(cstr_to_sstring("This is a sentence."), ' ');
     
     for (size_t i = 0; i < vector_size(vec); i++) {
         char *c = (char *)vector_get(vec, i);
