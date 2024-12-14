@@ -1,75 +1,131 @@
-// /**
-//  * finding_filesystems
-//  * CS 341 - Fall 2024
-//  */
-// #include "minixfs.h"
-// #include "minixfs_utils.h"
-// #include <errno.h>
-// #include <stdio.h>
-// #include <string.h>
+/**
+ * finding_filesystems
+ * CS 341 - Fall 2024
+ */
+#include "minixfs.h"
+#include "minixfs_utils.h"
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <math.h>
 
-// /**
-//  * Virtual paths:
-//  *  Add your new virtual endpoint to minixfs_virtual_path_names
-//  */
-// char *minixfs_virtual_path_names[] = {"info", /* add your paths here*/};
+#define MIN(x, y) (x < y ? x : y)
+#define MAX(x, y) (x > y ? x : y)
 
-// /**
-//  * Forward declaring block_info_string so that we can attach unused on it
-//  * This prevents a compiler warning if you haven't used it yet.
-//  *
-//  * This function generates the info string that the virtual endpoint info should
-//  * emit when read
-//  */
-// static char *block_info_string(ssize_t num_used_blocks) __attribute__((unused));
-// static char *block_info_string(ssize_t num_used_blocks) {
-//     char *block_string = NULL;
-//     ssize_t curr_free_blocks = DATA_NUMBER - num_used_blocks;
-//     asprintf(&block_string,
-//              "Free blocks: %zd\n"
-//              "Used blocks: %zd\n",
-//              curr_free_blocks, num_used_blocks);
-//     return block_string;
-// }
+/**
+ * Virtual paths:
+ *  Add your new virtual endpoint to minixfs_virtual_path_names
+ */
+char *minixfs_virtual_path_names[] = {"info", /* add your paths here*/};
 
-// // Don't modify this line unless you know what you're doing
-// int minixfs_virtual_path_count =
-//     sizeof(minixfs_virtual_path_names) / sizeof(minixfs_virtual_path_names[0]);
+/**
+ * Forward declaring block_info_string so that we can attach unused on it
+ * This prevents a compiler warning if you haven't used it yet.
+ *
+ * This function generates the info string that the virtual endpoint info should
+ * emit when read
+ */
+static char *block_info_string(ssize_t num_used_blocks) __attribute__((unused));
+static char *block_info_string(ssize_t num_used_blocks) {
+    char *block_string = NULL;
+    ssize_t curr_free_blocks = DATA_NUMBER - num_used_blocks;
+    asprintf(&block_string,
+             "Free blocks: %zd\n"
+             "Used blocks: %zd\n",
+             curr_free_blocks, num_used_blocks);
+    return block_string;
+}
 
-// int minixfs_chmod(file_system *fs, char *path, int new_permissions) {
-//     // Thar she blows!
-//     inode *node = get_inode(fs, path);
-//     if (!node) {
-//         errno = ENOENT;
-//         return -1;
-//     }
-//     uint16_t temp = node->mode >> RWX_BITS_NUMBER;
-//     node->mode = new_permissions | (temp << RWX_BITS_NUMBER) ;
-//     clock_gettime(CLOCK_REALTIME, &(node->ctim));
-//     return 0;
-// }
+// Don't modify this line unless you know what you're doing
+int minixfs_virtual_path_count =
+    sizeof(minixfs_virtual_path_names) / sizeof(minixfs_virtual_path_names[0]);
 
-// int minixfs_chown(file_system *fs, char *path, uid_t owner, gid_t group) {
-//     // Land ahoy!
-//     inode *node = get_inode(fs, path);
-//     if (!node) {
-//         errno = ENOENT;
-//         return -1;
-//     }
-//     if (owner != ((uid_t)-1)) {
-//         node->uid = owner;
-//     }
-//     if (group != ((uid_t)-1)) {
-//         node->gid = group;
-//     }
-//     clock_gettime(CLOCK_REALTIME, &(node->ctim));
-//     return 0;
-// }
+int minixfs_chmod(file_system *fs, char *path, int new_permissions) {
+    // Thar she blows!
+    inode *node = get_inode(fs, path);
+    if (!node) {
+        errno = ENOENT;
+        return -1;
+    }
+    uint16_t temp = node->mode >> RWX_BITS_NUMBER;
+    node->mode = new_permissions | (temp << RWX_BITS_NUMBER) ;
+    clock_gettime(CLOCK_REALTIME, &(node->ctim));
+    return 0;
+}
 
-// inode *minixfs_create_inode_for_path(file_system *fs, const char *path) {
-//     // Land ahoy!
-//     return NULL;
-// }
+int minixfs_chown(file_system *fs, char *path, uid_t owner, gid_t group) {
+    // Land ahoy!
+    inode *node = get_inode(fs, path);
+    if (!node) {
+        errno = ENOENT;
+        return -1;
+    }
+    if (owner != ((uid_t)-1)) {
+        node->uid = owner;
+    }
+    if (group != ((uid_t)-1)) {
+        node->gid = group;
+    }
+    clock_gettime(CLOCK_REALTIME, &(node->ctim));
+    return 0;
+}
+
+inode *minixfs_create_inode_for_path(file_system *fs, const char *path) {
+    // Land ahoy!
+    if (get_inode(fs, path) || !valid_filename(path)) {
+        return NULL;
+    }
+    const char *filename = NULL;
+    inode *parent = parent_directory(fs, path, &filename);
+    inode_number new_inode_number = first_unused_inode(fs);
+    inode *new_inode = &(fs->inode_root[new_inode_number]);
+    init_inode(parent, new_inode);
+    minixfs_dirent new_dirent;
+    new_dirent.name = strdup(filename);
+    new_dirent.inode_num = new_inode_number;
+
+    int num_blocks = ceil(parent->size / sizeof(data_block));
+    int remain_size = parent->size % sizeof(data_block);
+    
+    if (num_blocks < NUM_DIRECT_BLOCKS) { // direct block are not full
+        if (parent->direct[num_blocks] == UNASSIGNED_NODE) {
+            if (add_data_block_to_inode(fs, parent) == -1) {
+                errno = ENOSPC;
+                return NULL;
+            }
+        }
+        make_string_from_dirent((char *)(fs->data_root + parent->direct[num_blocks]) + remain_size, new_dirent);
+        // data_block_number data_block_num = parent->direct[num_blocks];
+        // make_string_from_dirent(fs->data_root[data_block_num].data + remain_size, new_dirent);
+    } else { // direct block are full
+        if (parent->indirect == UNASSIGNED_NODE) {
+            if (add_single_indirect_block(fs, parent) == -1) {
+                errno = ENOSPC;
+                return NULL;
+            }
+        }
+
+        data_block_number *indirect_blocks = (data_block_number *)(fs->data_root + parent->indirect);
+        int indirect_index = num_blocks - NUM_DIRECT_BLOCKS;
+
+        if (indirect_blocks[indirect_index] == UNASSIGNED_NODE) {
+            if (add_data_block_to_indirect_block(fs, indirect_blocks) == -1) {
+                errno = ENOSPC;
+                return NULL;
+            }
+        }
+
+        make_string_from_dirent((char *)(fs->data_root + indirect_blocks[indirect_index]) + remain_size, new_dirent);
+        // data_block_number indirect_block_num = parent->indirect;
+        // data_block_number *indirect_block = (data_block_number *)fs->data_root[indirect_block_num].data;
+        // data_block_number data_block_num = indirect_block[num_blocks - NUM_DIRECT_BLOCKS];
+        // make_string_from_dirent(fs->data_root[data_block_num].data + remain_size, new_dirent);
+    }
+    free(new_dirent.name);
+    return fs->inode_root + new_inode_number;
+}
 
 // ssize_t minixfs_virtual_read(file_system *fs, const char *path, void *buf,
 //                              size_t count, off_t *off) {
@@ -95,102 +151,6 @@
 //     // 'ere be treasure!
 //     return -1;
 // }
-
-/**
- * finding_filesystems
- * CS 341 - Fall 2024
- */
-#include "minixfs.h"
-#include "minixfs_utils.h"
-#include <errno.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-
-// Add these macros to handle MIN and MAX
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
-#define MAX(x, y) ((x) > (y) ? (x) : (y))
-
-/**
- * Virtual paths:
- *  Add your new virtual endpoint to minixfs_virtual_path_names
- */
-char *minixfs_virtual_path_names[] = {"info"};
-
-// Don't modify this line unless you know what you're doing
-int minixfs_virtual_path_count =
-    sizeof(minixfs_virtual_path_names) / sizeof(minixfs_virtual_path_names[0]);
-
-static char *block_info_string(ssize_t num_used_blocks) {
-    char *block_string = NULL;
-    ssize_t curr_free_blocks = DATA_NUMBER - num_used_blocks;
-    asprintf(&block_string,
-             "Free blocks: %zd\n"
-             "Used blocks: %zd\n",
-             curr_free_blocks, num_used_blocks);
-    return block_string;
-}
-
-int minixfs_chmod(file_system *fs, char *path, int new_permissions) {
-    inode *node = get_inode(fs, path);
-    if (!node) {
-        errno = ENOENT;
-        return -1;
-    }
-    uint16_t temp = node->mode >> RWX_BITS_NUMBER;
-    node->mode = new_permissions | (temp << RWX_BITS_NUMBER);
-    clock_gettime(CLOCK_REALTIME, &(node->ctim));
-    return 0;
-}
-
-int minixfs_chown(file_system *fs, char *path, uid_t owner, gid_t group) {
-    inode *node = get_inode(fs, path);
-    if (!node) {
-        errno = ENOENT;
-        return -1;
-    }
-    if (owner != (uid_t)-1) {
-        node->uid = owner;
-    }
-    if (group != (uid_t)-1) {
-        node->gid = group;
-    }
-    clock_gettime(CLOCK_REALTIME, &(node->ctim));
-    return 0;
-}
-
-inode *minixfs_create_inode_for_path(file_system *fs, const char *path) {
-    const char *filename;
-    inode *parent = parent_directory(fs, path, &filename);
-
-    if (!parent || !valid_filename(filename)) {
-        errno = ENOENT;
-        return NULL;
-    }
-
-    inode_number new_inode_index = first_unused_inode(fs);
-    if (new_inode_index == -1) {
-        errno = ENOSPC;
-        return NULL;
-    }
-
-    inode *new_inode = &(fs->inode_root[new_inode_index]);
-    init_inode(parent, new_inode);
-
-    minixfs_dirent new_entry = { .inode_num = new_inode_index };
-    strncpy(new_entry.name, filename, FILE_NAME_LENGTH - 1);
-    new_entry.name[FILE_NAME_LENGTH - 1] = '\0';
-
-    if (add_data_block_to_inode(fs, parent) == -1) {
-        errno = ENOSPC;
-        return NULL;
-    }
-    make_string_from_dirent((char *)(fs->data_root + parent->direct[0]) + parent->size, new_entry);
-    parent->size += FILE_NAME_ENTRY;
-    clock_gettime(CLOCK_REALTIME, &(parent->mtim));
-
-    return new_inode;
-}
 
 ssize_t minixfs_virtual_read(file_system *fs, const char *path, void *buf,
                              size_t count, off_t *off) {

@@ -108,7 +108,7 @@ typedef struct {
 
     /**
      *  Updated any time any time this inode is read from
-     *    For a directory: Every time you've ls'ed or cat'ed directory
+     *    For a directory: Every time you've ls'ed or cat'ed add_
      *    For a file: Every time you've cat'ed a file
      */
     struct timespec atim; /* time of last access */
