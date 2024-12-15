@@ -89,7 +89,7 @@ inode *minixfs_create_inode_for_path(file_system *fs, const char *path) {
     int num_blocks = ceil(parent->size / sizeof(data_block));
     int remain_size = parent->size % sizeof(data_block);
     
-    if (num_blocks < NUM_DIRECT_BLOCKS) { // direct block are not full
+    if (num_blocks < NUM_DIRECT_BLOCKS) { // direct block are NOT full
         if (parent->direct[num_blocks] == UNASSIGNED_NODE) {
             if (add_data_block_to_inode(fs, parent) == -1) {
                 errno = ENOSPC;
