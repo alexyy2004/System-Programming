@@ -1,0 +1,9 @@
+When the client connects it sends a 4 byte value (in network byte order) – the requested offset into the content. 
+The server responds with up to 260 bytes in its response. The first four bytes of the response, if returned, is 
+always the length of the content in network byte order. If the offset exceeds the length of the content, the server 
+returns only the length of the content. Otherwise, some additional bytes returned are returned (between 0 and 
+256 bytes; the exact number seems to be random). To get more bytes the client must sleep for 1 second then 
+create a new TCP connection. Failed network read/write errors should not stop the client retrying connections. 
+A difficult server will occasionally accept the connection but just close the connection without any reply.
+A stubborn server is trickier; it will may return just the 4 byte length and always refuse to return any content for 
+a few specific (non-zero) offset values. Your intelligent client will thus need to adjust their request accordingly.
